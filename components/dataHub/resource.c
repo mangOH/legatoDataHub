@@ -12,6 +12,8 @@
 #include "obs.h"
 #include "handler.h"
 
+/// Default number of placeholders.  This can be overridden in the .cdef.
+#define DEFAULT_PLACEHOLDER_POOL_SIZE   10
 
 /// true if an extended configuration update is in progress, false if in normal operating mode.
 static bool IsUpdateInProgress = false;
@@ -19,6 +21,9 @@ static bool IsUpdateInProgress = false;
 
 /// Pool of Placeholder resource objects, which are instances of res_Resource_t.
 static le_mem_PoolRef_t PlaceholderPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(PlaceholderPool,
+                          DEFAULT_PLACEHOLDER_POOL_SIZE,
+                          sizeof(res_Resource_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -33,7 +38,8 @@ void res_Init
     void
 )
 {
-    PlaceholderPool = le_mem_CreatePool("Placeholder", sizeof(res_Resource_t));
+    PlaceholderPool = le_mem_InitStaticPool(PlaceholderPool, DEFAULT_PLACEHOLDER_POOL_SIZE,
+                        sizeof(res_Resource_t));
     le_mem_SetDestructor(PlaceholderPool, (void (*)())res_Destruct);
 }
 
@@ -251,7 +257,7 @@ res_Resource_t* res_CreatePlaceholder
 )
 //--------------------------------------------------------------------------------------------------
 {
-    res_Resource_t* resPtr = le_mem_ForceAlloc(PlaceholderPool);
+    res_Resource_t* resPtr = le_mem_Alloc(PlaceholderPool);
 
     res_Construct(resPtr, entryRef);
 
@@ -1516,6 +1522,7 @@ static void ClearConfigChangingFlag
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(entryType);
     resPtr->isConfigChanging = false;
 }
 

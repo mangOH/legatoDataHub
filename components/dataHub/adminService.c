@@ -27,6 +27,8 @@ ResourceTreeChangeHandler_t;
 //--------------------------------------------------------------------------------------------------
 static le_dls_List_t ResourceTreeChangeHandlerList = LE_DLS_LIST_INIT;
 
+/// Default change handler pool size.  This may be overridden in the .cdef.
+#define DEFAULT_RESOURCE_TREE_CHANGE_HANDLER_POOL_SIZE 2
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -34,6 +36,9 @@ static le_dls_List_t ResourceTreeChangeHandlerList = LE_DLS_LIST_INIT;
  */
 //--------------------------------------------------------------------------------------------------
 static le_mem_PoolRef_t ResourceTreeChangeHandlerPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(ResourceTreeChangeHandlerPool,
+                          DEFAULT_RESOURCE_TREE_CHANGE_HANDLER_POOL_SIZE,
+                          sizeof(ResourceTreeChangeHandler_t));
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -2107,7 +2112,7 @@ admin_ResourceTreeChangeHandlerRef_t admin_AddResourceTreeChangeHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    ResourceTreeChangeHandler_t* handlerPtr = le_mem_ForceAlloc(ResourceTreeChangeHandlerPool);
+    ResourceTreeChangeHandler_t* handlerPtr = le_mem_Alloc(ResourceTreeChangeHandlerPool);
 
     handlerPtr->link = LE_DLS_LINK_INIT;
 
@@ -2174,8 +2179,8 @@ void adminService_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    ResourceTreeChangeHandlerPool = le_mem_CreatePool("ResourceTreeChangeHandlers",
-                                                  sizeof(ResourceTreeChangeHandler_t));
+    ResourceTreeChangeHandlerPool = le_mem_InitStaticPool(ResourceTreeChangeHandlerPool,
+        DEFAULT_RESOURCE_TREE_CHANGE_HANDLER_POOL_SIZE, sizeof(ResourceTreeChangeHandler_t));
 }
 
 //--------------------------------------------------------------------------------------------------

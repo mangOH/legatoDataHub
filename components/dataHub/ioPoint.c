@@ -26,6 +26,8 @@ typedef struct ioResource
 }
 IoResource_t;
 
+/// Default number of IO resources.  This can be overridden in the .cdef.
+#define DEFAULT_IO_RESOURCE_POOL_SIZE 10
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -33,6 +35,7 @@ IoResource_t;
  */
 //--------------------------------------------------------------------------------------------------
 static le_mem_PoolRef_t IoResourcePool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(IoResourcePool, DEFAULT_IO_RESOURCE_POOL_SIZE, sizeof(IoResource_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -65,7 +68,8 @@ void ioPoint_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    IoResourcePool = le_mem_CreatePool("I/O Resource", sizeof(IoResource_t));
+    IoResourcePool = le_mem_InitStaticPool(IoResourcePool, DEFAULT_IO_RESOURCE_POOL_SIZE,
+                        sizeof(IoResource_t));
     le_mem_SetDestructor(IoResourcePool, IoResourceDestructor);
 }
 
@@ -84,7 +88,7 @@ IoResource_t* Create
 )
 //--------------------------------------------------------------------------------------------------
 {
-    IoResource_t* ioPtr = le_mem_ForceAlloc(IoResourcePool);
+    IoResource_t* ioPtr = le_mem_Alloc(IoResourcePool);
 
     res_Construct(&ioPtr->resource, entryRef);
 
@@ -288,7 +292,8 @@ void ioPoint_DoTypeCoercion
                 {
                     double oldValue = dataSample_GetNumeric(fromSample);
                     char newValue[HUB_MAX_STRING_BYTES];
-                    if (snprintf(newValue, sizeof(newValue), "%lf", oldValue) >= sizeof(newValue))
+                    if (snprintf(newValue, sizeof(newValue), "%lf", oldValue) >=
+                        (int) sizeof(newValue))
                     {
                         // Should never happen.
                         LE_CRIT("String overflow.");
@@ -331,7 +336,8 @@ void ioPoint_DoTypeCoercion
                 {
                     double oldValue = dataSample_GetNumeric(fromSample);
                     char newValue[HUB_MAX_STRING_BYTES];
-                    if (snprintf(newValue, sizeof(newValue), "%lf", oldValue) >= sizeof(newValue))
+                    if (snprintf(newValue, sizeof(newValue), "%lf", oldValue) >=
+                        (int) sizeof(newValue))
                     {
                         // Should never happen.
                         LE_CRIT("String overflow.");
@@ -345,8 +351,8 @@ void ioPoint_DoTypeCoercion
                 {
                     const char* oldValue = dataSample_GetString(fromSample);
                     char newValue[HUB_MAX_STRING_BYTES];
-                    if (   snprintf(newValue, sizeof(newValue), "\"%s\"", oldValue)
-                        >= sizeof(newValue))
+                    if (snprintf(newValue, sizeof(newValue), "\"%s\"", oldValue) >=
+                        (int) sizeof(newValue))
                     {
                         // Truncate the string in the JSON value.
                         LE_DEBUG("String overflow.");

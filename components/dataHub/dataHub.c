@@ -139,12 +139,16 @@ resTree_EntryRef_t hub_GetClientNamespace
 )
 //--------------------------------------------------------------------------------------------------
 {
+    resTree_EntryRef_t nsRef;
+
+#if LE_CONFIG_LINUX
     // See if we already looked up the app name, etc. and saved it as the IPC session context ptr.
-    resTree_EntryRef_t nsRef = le_msg_GetSessionContextPtr(sessionRef);
+    nsRef = le_msg_GetSessionContextPtr(sessionRef);
     if (nsRef != NULL)
     {
         return nsRef;
     }
+#endif /* end LE_CONFIG_LINUX */
 
     // Get the client app name.
     pid_t clientPid;
@@ -168,9 +172,11 @@ resTree_EntryRef_t hub_GetClientNamespace
     // Now get the app's namespace under the /app namespace.
     nsRef = resTree_GetEntry(nsRef, appName);
 
+#if LE_CONFIG_LINUX
     // Store the namespace entry reference as the IPC session Context Ptr to speed things up
     // next time.
     le_msg_SetSessionContextPtr(sessionRef, nsRef);
+#endif /* end LE_CONFIG_LINUX */
 
     return nsRef;
 }

@@ -207,7 +207,7 @@ const char* dataSample_GetJson
  *  - LE_OVERFLOW if the buffer provided is too small to hold the value.
  */
 //--------------------------------------------------------------------------------------------------
-const le_result_t dataSample_ConvertToString
+le_result_t dataSample_ConvertToString
 (
     dataSample_Ref_t sampleRef,
     io_DataType_t dataType, ///< [IN] The data type of the data sample.
@@ -225,7 +225,7 @@ const le_result_t dataSample_ConvertToString
  *  - LE_OVERFLOW if the buffer provided is too small to hold the value.
  */
 //--------------------------------------------------------------------------------------------------
-const le_result_t dataSample_ConvertToJson
+le_result_t dataSample_ConvertToJson
 (
     dataSample_Ref_t sampleRef,
     io_DataType_t dataType, ///< [IN] The data type of the data sample.
