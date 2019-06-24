@@ -60,14 +60,15 @@
  *
  * An important set of conventions exist for structuring I/O resource paths:
  * - A sensor's main input resource must be called "value".
- * - An actuator's main output resource must be called "value".
- * - The name of the "value" resource's parent entry is the name of the sensor or actuator.
- * - All output resources under the same parent as a "value" resource are for related settings.
-
- * Furthermore, some conventions exist for settings related to sensors and actuators:
- * - If a boolean output resource called "enable" appears next to (under the same parent as)
- *   the "value" resource, then it can be used by administrator apps to disable the sensor
- *   or actuator (by setting that output to "false").
+ * - An actuator's main output resource must be called "enable".
+ * - The name of the "value" or "enable" resource's parent is the name of the sensor or actuator.
+ * - All output resources under the same parent as a "value" or "enable" resource are for related
+ *   settings.
+ *
+ * Furthermore, some conventions exist for settings related to sensors:
+ * - If a sensor has a boolean output resource called "enable" next to (under the same parent as)
+ *   its "value" resource, that "enable" resource can be used by administrator apps to disable the
+ *   sensor (by setting that output to "false").
  * - If a boolean output resource called "period" appears next to a "value" input resource
  *   then it can be used to tell the sensor to perform periodic sampling.
  * - If a trigger output resource called "trigger" appears next to a "value" input resource
@@ -106,7 +107,7 @@
   |
   +--/hvac
       |
-      +--/value = the HVAC system's temperature setpoint output
+      +--/temperature = the HVAC system's temperature setpoint output
       |
       +--/enable = an output used to enable or disable the HVAC system
       |

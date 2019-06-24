@@ -34,6 +34,14 @@ Sensor_t;
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * Pool from which Sensor_t objects are allocated.
+ */
+//--------------------------------------------------------------------------------------------------
+static le_mem_PoolRef_t SensorPool = NULL;
+
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Timer expiry handler function.
  */
 //--------------------------------------------------------------------------------------------------
@@ -70,14 +78,11 @@ static void HandleEnablePush
 
         if (enable)
         {
-            // If the period has been set, start the timer.
+            // If the period has been set, take a sample and start the timer.
             if (sensorPtr->period > 0.0)
             {
+                sensorPtr->sampleFunc(sensorPtr, sensorPtr->sampleFuncContext);
                 le_timer_Start(sensorPtr->timer);
-            }
-            else
-            {
-                LE_WARN("Sensor '%s' enabled before its period has been set.", sensorPtr->name);
             }
         }
         else
@@ -129,9 +134,11 @@ static void HandlePeriodPush
             interval.usec = (period - interval.sec) * 1000000;
             le_timer_SetInterval(sensorPtr->timer, interval);
 
-            // If the old value was zero and the sensor is enabled, start the timer now.
+            // If the old value was zero and the sensor is enabled, take a sample and
+            // start the timer now.
             if ((sensorPtr->period == 0) && sensorPtr->isEnabled)
             {
+                sensorPtr->sampleFunc(sensorPtr, sensorPtr->sampleFuncContext);
                 le_timer_Start(sensorPtr->timer);
             }
 
@@ -164,6 +171,32 @@ static void HandleTriggerPush
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * Build up the path to a resource from the sensor name and the resource (leaf) name.
+ */
+//--------------------------------------------------------------------------------------------------
+static void BuildResourcePath
+(
+    char* pathBuffPtr,  ///< Ptr to the buffer into which the path will be built.
+    size_t pathBuffSize,    ///< Size (in bytes) of the buffer pointed to by pathBuffPtr.
+    Sensor_t* sensorPtr, ///< Ptr to the Sensor scaffold object.
+    const char* resourceName  ///< E.g., "value" or "enable"
+)
+//--------------------------------------------------------------------------------------------------
+{
+    if (sensorPtr->name[0] == '\0')
+    {
+        LE_ASSERT(LE_OK == le_utf8_Copy(pathBuffPtr, resourceName, pathBuffSize, NULL));
+    }
+    else
+    {
+        LE_ASSERT(snprintf(pathBuffPtr, pathBuffSize, "%s/%s", sensorPtr->name, resourceName)
+                  < pathBuffSize);
+    }
+}
+
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Creates a periodic sensor scaffold for a sensor with a given name.
  *
  * This makes the sensor appear in the Data Hub and creates a timer for that sensor.
@@ -175,7 +208,7 @@ static void HandleTriggerPush
 //--------------------------------------------------------------------------------------------------
 psensor_Ref_t psensor_Create
 (
-    const char* name,   ///< Name of the periodic sensor.
+    const char* name,   ///< Name of the periodic sensor, or "" if the app name is sufficient.
     dhubIO_DataType_t dataType,
     const char* units,
     void (*sampleFunc)(psensor_Ref_t ref,
@@ -184,9 +217,7 @@ psensor_Ref_t psensor_Create
 )
 //--------------------------------------------------------------------------------------------------
 {
-    // Since there's no way to delete a sensor scaffold, it's okay to use malloc() here.
-    Sensor_t* sensorPtr = malloc(sizeof(Sensor_t));
-    LE_ASSERT(sensorPtr != NULL);
+    Sensor_t* sensorPtr = le_mem_ForceAlloc(SensorPool);
 
     sensorPtr->isEnabled = false;
     sensorPtr->period = 0.0;
@@ -206,14 +237,14 @@ psensor_Ref_t psensor_Create
 
     // Create the Data Hub resources "value", "enable", "period", and "trigger" for this sensor.
     char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", name) < sizeof(path));
+    BuildResourcePath(path, sizeof(path), sensorPtr, "value");
     le_result_t result = dhubIO_CreateInput(path, dataType, units);
     if (result != LE_OK)
     {
         LE_FATAL("Failed to create Data Hub Input '%s' (%s).", path, LE_RESULT_TXT(result));
     }
 
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/enable", name) < sizeof(path));
+    BuildResourcePath(path, sizeof(path), sensorPtr, "enable");
     result = dhubIO_CreateOutput(path, DHUBIO_DATA_TYPE_BOOLEAN, "");
     if (result != LE_OK)
     {
@@ -221,7 +252,7 @@ psensor_Ref_t psensor_Create
     }
     sensorPtr->enableHandlerRef = dhubIO_AddBooleanPushHandler(path, HandleEnablePush, sensorPtr);
 
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/period", name) < sizeof(path));
+    BuildResourcePath(path, sizeof(path), sensorPtr, "period");
     result = dhubIO_CreateOutput(path, DHUBIO_DATA_TYPE_NUMERIC, "s");
     if (result != LE_OK)
     {
@@ -229,7 +260,7 @@ psensor_Ref_t psensor_Create
     }
     sensorPtr->periodHandlerRef = dhubIO_AddNumericPushHandler(path, HandlePeriodPush, sensorPtr);
 
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/trigger", name) < sizeof(path));
+    BuildResourcePath(path, sizeof(path), sensorPtr, "trigger");
     result = dhubIO_CreateOutput(path, DHUBIO_DATA_TYPE_TRIGGER, "");
     if (result != LE_OK)
     {
@@ -239,6 +270,41 @@ psensor_Ref_t psensor_Create
     dhubIO_MarkOptional(path);
 
     return sensorPtr;
+}
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Creates a periodic sensor scaffold for a sensor with a given name that produces JSON samples.
+ *
+ * This makes the sensor appear in the Data Hub and creates a timer for that sensor.
+ * The sampleFunc will be called whenever it's time to take a sample.  The sampleFunc is supposed
+ * to call psensor_PushJson() to push the JSON sample.
+ *
+ * @return Reference to the new periodic sensor scaffold.
+ */
+//--------------------------------------------------------------------------------------------------
+psensor_Ref_t psensor_CreateJson
+(
+    const char* name,   ///< Name of the periodic sensor, or "" if the app name is sufficient.
+    const char* jsonExample,    ///< String containing example JSON value.
+    void (*sampleFunc)(psensor_Ref_t ref,
+                       void *context), ///< Sample function to be called back periodically.
+    void *sampleFuncContext  ///< Context pointer to be passed to the sample function
+)
+//--------------------------------------------------------------------------------------------------
+{
+    psensor_Ref_t ref = psensor_Create(name,
+                                       DHUBIO_DATA_TYPE_JSON,
+                                       "", // units
+                                       sampleFunc,
+                                       sampleFuncContext);
+
+    char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
+    BuildResourcePath(path, sizeof(path), ref, "value");
+    dhubIO_SetJsonExample(path, jsonExample);
+
+    return ref;
 }
 
 
@@ -256,7 +322,6 @@ void psensor_Destroy
     Sensor_t* sensorPtr;
     char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
 
-
     LE_ASSERT(NULL != ref);
 
     sensorPtr = *ref;
@@ -271,27 +336,22 @@ void psensor_Destroy
         le_timer_Delete(sensorPtr->timer);
 
         // Deregister handlers and remove resources
-        LE_ASSERT(snprintf(path, sizeof(path), "%s/trigger", sensorPtr->name) < sizeof(path));
+        BuildResourcePath(path, sizeof(path), sensorPtr, "trigger");
         dhubIO_RemoveTriggerPushHandler(sensorPtr->triggerHandlerRef);
         dhubIO_DeleteResource(path);
 
-
-        LE_ASSERT(snprintf(path, sizeof(path), "%s/period", sensorPtr->name) < sizeof(path));
+        BuildResourcePath(path, sizeof(path), sensorPtr, "period");
         dhubIO_RemoveNumericPushHandler(sensorPtr->periodHandlerRef);
         dhubIO_DeleteResource(path);
 
-
-        LE_ASSERT(snprintf(path, sizeof(path), "%s/enable", sensorPtr->name) < sizeof(path));
+        BuildResourcePath(path, sizeof(path), sensorPtr, "enable");
         dhubIO_RemoveBooleanPushHandler(sensorPtr->enableHandlerRef);
         dhubIO_DeleteResource(path);
 
-
-        LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < sizeof(path));
+        BuildResourcePath(path, sizeof(path), sensorPtr, "value");
         dhubIO_DeleteResource(path);
 
-        dhubIO_DeleteResource(sensorPtr->name);
-
-        free(sensorPtr);
+        le_mem_Release(sensorPtr);
     }
 }
 
@@ -386,4 +446,5 @@ void psensor_PushJson
 
 COMPONENT_INIT
 {
+    SensorPool = le_mem_CreatePool("psensor", sizeof(Sensor_t));
 }

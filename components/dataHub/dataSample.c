@@ -33,20 +33,31 @@ typedef struct DataSample
         bool boolean;
         double numeric;
         char string[0]; ///< A string type data sample has space for the array after this struct.
+                        ///< @warning This union MUST BE the LAST MEMBER of DataSample_t.
     } value;
 }
 DataSample_t;
 
-/// The number of bytes to allocate in a String Data Sample Pool block.
-#define STRING_SAMPLE_OBJECT_BYTES (sizeof(DataSample_t) + HUB_MAX_STRING_BYTES - sizeof(double))
+/// The maximum number of bytes in a small string, including the null terminator.
+/// Strings longer than this are considered "huge".
+#define SMALL_STRING_BYTES 300
 
+/// The number of bytes to allocate in a (small) String Data Sample Pool block.
+#define SMALL_STRING_SAMPLE_OBJECT_BYTES (offsetof(DataSample_t, value) + SMALL_STRING_BYTES)
+
+/// The number of bytes to allocate in a Huge String Data Sample Pool block.
+#define HUGE_STRING_SAMPLE_OBJECT_BYTES (offsetof(DataSample_t, value) + HUB_MAX_STRING_BYTES)
 
 /// Pool of Data Sample objects that don't hold strings.
-static le_mem_PoolRef_t DataSamplePool = NULL;
+static le_mem_PoolRef_t NonStringSamplePool = NULL;
 
 /// Pool of Data Sample objects that hold strings.
-static le_mem_PoolRef_t StringDataSamplePool = NULL;
+static le_mem_PoolRef_t SmallStringSamplePool = NULL;
 
+/// Pool of Data Sample objects that hold huge strings.
+/// @note This needs to be a separate pool because otherwise the majority case of small strings
+///       results in massive unnecessary memory consumption (internal fragmentation).
+static le_mem_PoolRef_t HugeStringSamplePool = NULL;
 
 
 //--------------------------------------------------------------------------------------------------
@@ -60,9 +71,28 @@ void dataSample_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSamplePool = le_mem_CreatePool("Data Sample", sizeof(DataSample_t));
+    NonStringSamplePool = le_mem_CreatePool("Data Sample", sizeof(DataSample_t));
 
-    StringDataSamplePool = le_mem_CreatePool("String Data Sample", STRING_SAMPLE_OBJECT_BYTES);
+    SmallStringSamplePool = le_mem_CreatePool("Small String Sample",
+                                              SMALL_STRING_SAMPLE_OBJECT_BYTES);
+
+    HugeStringSamplePool = le_mem_CreatePool("Huge String Sample",
+                                             HUGE_STRING_SAMPLE_OBJECT_BYTES);
+}
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * @return True if a given string is shorter than SMALL_STRING_BYTES, including its null terminator.
+ */
+//--------------------------------------------------------------------------------------------------
+static inline bool IsSmallString
+(
+    const char* string
+)
+//--------------------------------------------------------------------------------------------------
+{
+    return (strnlen(string, SMALL_STRING_BYTES) < SMALL_STRING_BYTES);
 }
 
 
@@ -111,7 +141,7 @@ dataSample_Ref_t dataSample_CreateTrigger
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(NonStringSamplePool, timestamp);
 
     return samplePtr;
 }
@@ -133,7 +163,7 @@ dataSample_Ref_t dataSample_CreateBoolean
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(NonStringSamplePool, timestamp);
     samplePtr->value.boolean = value;
 
     return samplePtr;
@@ -156,7 +186,7 @@ dataSample_Ref_t dataSample_CreateNumeric
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(NonStringSamplePool, timestamp);
     samplePtr->value.numeric = value;
 
     return samplePtr;
@@ -181,11 +211,24 @@ dataSample_Ref_t dataSample_CreateString
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(StringDataSamplePool, timestamp);
-
-    if (LE_OK != le_utf8_Copy(samplePtr->value.string, value, HUB_MAX_STRING_BYTES, NULL))
+    le_mem_PoolRef_t pool;
+    size_t maxSize;
+    if (IsSmallString(value))
     {
-        LE_FATAL("String value longer than max permitted size of %d", HUB_MAX_STRING_BYTES);
+        pool = SmallStringSamplePool;
+        maxSize = SMALL_STRING_BYTES;
+    }
+    else
+    {
+        pool = HugeStringSamplePool;
+        maxSize = HUB_MAX_STRING_BYTES;
+    }
+
+    DataSample_t* samplePtr = CreateSample(pool, timestamp);
+
+    if (LE_OK != le_utf8_Copy(samplePtr->value.string, value, maxSize, NULL))
+    {
+        LE_FATAL("String value longer than max permitted size of %d", maxSize);
     }
 
     return samplePtr;
@@ -524,11 +567,18 @@ dataSample_Ref_t dataSample_Copy
 
     if ((dataType == IO_DATA_TYPE_STRING) || (dataType == IO_DATA_TYPE_JSON))
     {
-        pool = StringDataSamplePool;
+        if (IsSmallString(original->value.string))
+        {
+            pool = SmallStringSamplePool;
+        }
+        else
+        {
+            pool = HugeStringSamplePool;
+        }
     }
     else
     {
-        pool = DataSamplePool;
+        pool = NonStringSamplePool;
     }
 
     dataSample_Ref_t duplicate = le_mem_ForceAlloc(pool);

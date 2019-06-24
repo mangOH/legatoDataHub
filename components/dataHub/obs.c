@@ -43,7 +43,7 @@
 #include <ftw.h>
 
 #ifdef LEGATO_EMBEDDED
- #define BACKUP_DIR "/data/dataHubBackup/"
+ #define BACKUP_DIR "/home/root/dataHubBackup/"
 #else
  #define BACKUP_DIR "backup/"
 #endif
@@ -1194,8 +1194,6 @@ static void Backup
 )
 //--------------------------------------------------------------------------------------------------
 {
-    LE_DEBUG("Backing up...");
-
     // If the backup timer exists, delete it.
     if (obsPtr->backupTimer != NULL)
     {
@@ -1213,6 +1211,8 @@ static void Backup
     {
         return;
     }
+
+    LE_DEBUG("Backing up to '%s'...", path);
 
     // Create the backup directory, if it doesn't exist already.
     struct stat st = {0};
