@@ -317,7 +317,8 @@ bool res_HasAdminSettings
 void res_MoveAdminSettings
 (
     res_Resource_t* srcPtr,   ///< Move settings from this resource
-    res_Resource_t* destPtr   ///< Move settings to this resource
+    res_Resource_t* destPtr,  ///< Move settings to this resource
+    admin_EntryType_t replacementType ///< The type of the replacement resource.
 );
 
 

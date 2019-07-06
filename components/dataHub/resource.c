@@ -739,20 +739,48 @@ bool res_HasAdminSettings
 void res_MoveAdminSettings
 (
     res_Resource_t* srcPtr,   ///< Move settings from this entry
-    res_Resource_t* destPtr   ///< Move settings to this entry
+    res_Resource_t* destPtr,  ///< Move settings to this entry
+    admin_EntryType_t replacementType ///< The type of the replacement resource.
 )
 //--------------------------------------------------------------------------------------------------
 {
     LE_ASSERT(srcPtr->entryRef != NULL);
     LE_ASSERT(destPtr->entryRef != NULL);
 
-    // Copy over the units string.
-    LE_ASSERT(LE_OK == le_utf8_Copy(destPtr->units, srcPtr->units, sizeof(destPtr->units), NULL));
+    // If the destination is an Input or Output, it must be treated differently to other types
+    // of resources because the app that creates it has the final authority on what its data type
+    // and units are, and therefore we
+    //  - don't want to clobber whatever data type and units the app has specified for its I/O, and
+    //  - we have to check for data type compatibility before moving over the current value data
+    //    sample (if any) to an Input or an Output.
+    if ((replacementType == ADMIN_ENTRY_TYPE_INPUT) || (replacementType == ADMIN_ENTRY_TYPE_OUTPUT))
+    {
+        // If the old resource has a current value,
+        if (srcPtr->currentValue != NULL)
+        {
+            // If the data type is a match for the new resource, move the current value over.
+            if (srcPtr->currentType == destPtr->currentType)
+            {
+                destPtr->currentValue = srcPtr->currentValue;
+                srcPtr->currentValue = NULL; // dest took the reference count
+            }
+            else  // The data type doesn't match, so drop the old resource's current value.
+            {
+                le_mem_Release(srcPtr->currentValue);
+                srcPtr->currentValue = NULL;
+            }
+        }
+    }
+    else // *Not* an Input or Output,
+    {
+        // Copy over the units string.
+        SetUnits(destPtr, srcPtr->units);
 
-    // Move the current value
-    destPtr->currentType = srcPtr->currentType;
-    destPtr->currentValue = srcPtr->currentValue;
-    srcPtr->currentValue = NULL; // dest took the reference count
+        // Move the current value (the new resource takes on the data type of the old resource).
+        destPtr->currentType = srcPtr->currentType;
+        destPtr->currentValue = srcPtr->currentValue;
+        srcPtr->currentValue = NULL; // dest took the reference count
+    }
 
     // Move the last pushed value
     destPtr->pushedType = srcPtr->pushedType;
