@@ -310,7 +310,7 @@ static void ReplaceResource
         // Note that this may result in lost settings. For example, Placeholders don't have
         // filter settings, but Observations do, so moving settings from an Observation to a
         // Placeholder will lose the Observation's filter settings.
-        res_MoveAdminSettings(entryRef->resourcePtr, replacementPtr);
+        res_MoveAdminSettings(entryRef->resourcePtr, replacementPtr, replacementType);
 
         // Delete the original resource.
         le_mem_Release(entryRef->resourcePtr);
@@ -549,6 +549,7 @@ resTree_EntryRef_t resTree_GetInput
     {
         // If a Namespace or Placeholder currently resides at that spot in the tree, replace it with
         // an Input.
+        // NOTE: If a new entry was created for this, it will be a Namespace entry.
         case ADMIN_ENTRY_TYPE_NAMESPACE:
         case ADMIN_ENTRY_TYPE_PLACEHOLDER:
         {
