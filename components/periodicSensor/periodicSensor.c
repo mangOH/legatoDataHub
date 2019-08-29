@@ -198,8 +198,9 @@ static void BuildResourcePath
     }
     else
     {
-        LE_ASSERT(snprintf(pathBuffPtr, pathBuffSize, "%s/%s", sensorPtr->name, resourceName)
-                  < pathBuffSize);
+        int result = snprintf(pathBuffPtr, pathBuffSize, "%s/%s", sensorPtr->name, resourceName);
+        LE_ASSERT(result > 0);
+        LE_ASSERT((size_t) result < pathBuffSize);
     }
 }
 
