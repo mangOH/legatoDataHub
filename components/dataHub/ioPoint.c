@@ -268,100 +268,34 @@ void ioPoint_DoTypeCoercion
             break;
 
         case IO_DATA_TYPE_STRING:
-
-            switch (fromType)
+        {
+            char newValue[HUB_MAX_STRING_BYTES];
+            if (dataSample_ConvertToString(fromSample, fromType, newValue, sizeof(newValue)) == LE_OK)
             {
-                case IO_DATA_TYPE_TRIGGER:
-
-                    toSample = dataSample_CreateString(timestamp, "");
-                    break;
-
-                case IO_DATA_TYPE_BOOLEAN:
-                {
-                    bool oldValue = dataSample_GetBoolean(fromSample);
-                    const char* newValue = oldValue ? "true" : "false";
-                    toSample = dataSample_CreateString(timestamp, newValue);
-                    break;
-                }
-
-                case IO_DATA_TYPE_NUMERIC:
-                {
-                    double oldValue = dataSample_GetNumeric(fromSample);
-                    char newValue[HUB_MAX_STRING_BYTES];
-                    if (snprintf(newValue, sizeof(newValue), "%lf", oldValue) >= sizeof(newValue))
-                    {
-                        // Should never happen.
-                        LE_CRIT("String overflow.");
-                        newValue[0] = '\0';
-                    }
-                    toSample = dataSample_CreateString(timestamp, newValue);
-                    break;
-                }
-
-                case IO_DATA_TYPE_STRING:
-
-                    break;  // No conversion required.
-
-                case IO_DATA_TYPE_JSON:
-
-                    toSample = dataSample_CreateString(timestamp, dataSample_GetJson(fromSample));
-                    break;
-
+                toSample = dataSample_CreateString(timestamp, newValue);
+            }
+            else
+            {
+                LE_CRIT("String length exceeds HUB_MAX_STRING_BYTES");
+                toSample = NULL;
             }
             break;
+        }
 
         case IO_DATA_TYPE_JSON:
-
-            switch (fromType)
+        {
+            char newValue[HUB_MAX_STRING_BYTES];
+            if (dataSample_ConvertToJson(fromSample, fromType, newValue, sizeof(newValue)) == LE_OK)
             {
-                case IO_DATA_TYPE_TRIGGER:
-
-                    toSample = dataSample_CreateJson(timestamp, "null");
-                    break;
-
-                case IO_DATA_TYPE_BOOLEAN:
-                {
-                    bool oldValue = dataSample_GetBoolean(fromSample);
-                    const char* newValue = oldValue ? "true" : "false";
-                    toSample = dataSample_CreateJson(timestamp, newValue);
-                    break;
-                }
-
-                case IO_DATA_TYPE_NUMERIC:
-                {
-                    double oldValue = dataSample_GetNumeric(fromSample);
-                    char newValue[HUB_MAX_STRING_BYTES];
-                    if (snprintf(newValue, sizeof(newValue), "%lf", oldValue) >= sizeof(newValue))
-                    {
-                        // Should never happen.
-                        LE_CRIT("String overflow.");
-                        newValue[0] = '\0';
-                    }
-                    toSample = dataSample_CreateJson(timestamp, newValue);
-                    break;
-                }
-
-                case IO_DATA_TYPE_STRING:
-                {
-                    const char* oldValue = dataSample_GetString(fromSample);
-                    char newValue[HUB_MAX_STRING_BYTES];
-                    if (   snprintf(newValue, sizeof(newValue), "\"%s\"", oldValue)
-                        >= sizeof(newValue))
-                    {
-                        // Truncate the string in the JSON value.
-                        LE_DEBUG("String overflow.");
-                        newValue[sizeof(newValue - 2)] = '"';
-                        newValue[sizeof(newValue - 1)] = '\0';
-                    }
-                    toSample = dataSample_CreateJson(timestamp, newValue);
-                    break;
-                }
-
-                case IO_DATA_TYPE_JSON:
-
-                    break;  // No conversion required.
+                toSample = dataSample_CreateJson(timestamp, newValue);
+            }
+            else
+            {
+                LE_CRIT("JSON length exceeds HUB_MAX_STRING_BYTES");
+                toSample = NULL;
             }
             break;
+        }
     }
 
     // If a conversion happened, release the old value and replace it with the new one.
