@@ -159,8 +159,8 @@ static size_t EscapeCharacter
         default:
         {
             /* Unicode codepoint */
-            int len = snprintf(&escapedChar[1], 4,"u%04x", inputChar[0]);
-            LE_ASSERT(len == 4);
+            int len = snprintf(&escapedChar[1], 6,"u%04x", inputChar[0]);
+            LE_ASSERT(len == 5);
             break;
         }
     }
