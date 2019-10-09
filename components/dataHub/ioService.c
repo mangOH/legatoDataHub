@@ -561,7 +561,7 @@ void io_RemoveTriggerPushHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    handler_Remove((hub_HandlerRef_t)handlerRef);
+    resTree_RemovePushHandler((hub_HandlerRef_t)handlerRef);
 }
 
 
@@ -600,7 +600,7 @@ void io_RemoveBooleanPushHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    handler_Remove((hub_HandlerRef_t)handlerRef);
+    resTree_RemovePushHandler((hub_HandlerRef_t)handlerRef);
 }
 
 
@@ -640,7 +640,7 @@ void io_RemoveNumericPushHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    handler_Remove((hub_HandlerRef_t)handlerRef);
+    resTree_RemovePushHandler((hub_HandlerRef_t)handlerRef);
 }
 
 
@@ -680,7 +680,7 @@ void io_RemoveStringPushHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    handler_Remove((hub_HandlerRef_t)handlerRef);
+    resTree_RemovePushHandler((hub_HandlerRef_t)handlerRef);
 }
 
 
@@ -719,7 +719,7 @@ void io_RemoveJsonPushHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    handler_Remove((hub_HandlerRef_t)handlerRef);
+    resTree_RemovePushHandler((hub_HandlerRef_t)handlerRef);
 }
 
 
@@ -1198,6 +1198,89 @@ static void CallUpdateStartEndHandlers
 
 //--------------------------------------------------------------------------------------------------
 /**
+ * Recursively walk the branch of the resource tree rooted at a given node, deleting anything that
+ * doesn't have admin settings or children and converting anything that does have admin settings or
+ * children into a placeholder or namespace.
+ */
+//--------------------------------------------------------------------------------------------------
+static void CleanUp
+(
+    resTree_EntryRef_t resource
+)
+//--------------------------------------------------------------------------------------------------
+{
+    // Do depth-first recursion.
+    resTree_EntryRef_t child = resTree_GetFirstChild(resource);
+    while (child != NULL)
+    {
+        resTree_EntryRef_t nextChild = resTree_GetNextSibling(child);
+        CleanUp(child);
+        child = nextChild;
+    }
+
+    switch (resTree_GetEntryType(resource))
+    {
+        case ADMIN_ENTRY_TYPE_NAMESPACE:
+        case ADMIN_ENTRY_TYPE_PLACEHOLDER:
+
+            // These don't need to be deleted.
+            // A Namespace will automatically be cleaned up when all its children go away.
+            // A Placeholder should be kept until the Admin app removes all its admin settings.
+            break;
+
+        case ADMIN_ENTRY_TYPE_INPUT:
+        case ADMIN_ENTRY_TYPE_OUTPUT:
+
+            // If this is an Input or Output resource, delete it now.
+            // This will convert it to a Placeholder if it has administrative settings.
+            resTree_DeleteIO(resource);
+            break;
+
+        case ADMIN_ENTRY_TYPE_OBSERVATION:
+        case ADMIN_ENTRY_TYPE_NONE:
+
+            // These should never be seen in an I/O API app namespace.
+            LE_FATAL("Unexpected resource type found in app's namespace.");
+            break;
+    }
+}
+
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Call-back function that gets called when an API client session closes.
+ * This allows us to clean up after a client that has gone away.
+ */
+//--------------------------------------------------------------------------------------------------
+static void SessionCloseHandler
+(
+    le_msg_SessionRef_t sessionRef,
+    void* contextPtr // not used
+)
+//--------------------------------------------------------------------------------------------------
+{
+    // Get the resource node at the root of this client's namespace.
+    resTree_EntryRef_t nsRef = hub_GetClientNamespace(sessionRef);
+
+    if (nsRef != NULL)
+    {
+        // NOTE: If the namespace cannot be retrieved, then we can rest assured that no
+        //       namespace was ever created for this client.  You can't create nodes under
+        //       a namespace without first fetching that namespace at least once, and
+        //       if the app's namespace is *ever* fetched, it is cached in the IPC session's
+        //       context, so it will be found even if the whole client app is dead and gone.
+
+        LE_DEBUG("App '%s' closed its I/O API session.", resTree_GetEntryName(nsRef));
+
+        // Walk the tree, deleting anything that doesn't have admin settings and converting
+        // anything that does have admin settings into a placeholder.
+        CleanUp(nsRef);
+    }
+}
+
+
+//--------------------------------------------------------------------------------------------------
+/**
  * Initializes the module.  Must be called before any other functions in the module are called.
  */
 //--------------------------------------------------------------------------------------------------
@@ -1209,6 +1292,10 @@ void ioService_Init
 {
     UpdateStartEndHandlerPool = le_mem_CreatePool("UpdateStartEndHandlers",
                                                   sizeof(UpdateStartEndHandler_t));
+
+    // Register for notification of client sessions closing, so we can convert Input and Output
+    // objects into placeholders (or delete them) when the clients that created them go away.
+    le_msg_AddServiceCloseHandler(io_GetServiceRef(), SessionCloseHandler, NULL);
 }
 
 

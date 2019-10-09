@@ -118,9 +118,11 @@ static void DeleteHandler
 //--------------------------------------------------------------------------------------------------
 /**
  * Remove a Handler from a given list.
+ *
+ * @return A pointer to the list that the handler was removed from, or NULL if not found.
  */
 //--------------------------------------------------------------------------------------------------
-void handler_Remove
+le_dls_List_t* handler_Remove
 (
     hub_HandlerRef_t handlerRef
 )
@@ -130,13 +132,17 @@ void handler_Remove
 
     if (handlerPtr != NULL)
     {
-        le_dls_Remove(handlerPtr->listPtr, &handlerPtr->link);
+        le_dls_List_t* listPtr = handlerPtr->listPtr;
+        le_dls_Remove(listPtr, &handlerPtr->link);
 
         DeleteHandler(handlerPtr);
+
+        return listPtr;
     }
     else
     {
         LE_ERROR("Invalid handler reference %p", handlerRef);
+        return NULL;
     }
 }
 
@@ -335,6 +341,8 @@ void handler_MoveAll
 
     while (NULL != (linkPtr = le_dls_Pop(srcListPtr)))
     {
+        Handler_t* handlerPtr = CONTAINER_OF(linkPtr, Handler_t, link);
+        handlerPtr->listPtr = destListPtr;
         le_dls_Queue(destListPtr, linkPtr);
     }
 }

@@ -44,9 +44,11 @@ hub_HandlerRef_t handler_Add
 //--------------------------------------------------------------------------------------------------
 /**
  * Remove a Handler from whatever list it is on.
+ *
+ * @return A pointer to the list that the handler was removed from, or NULL if not found.
  */
 //--------------------------------------------------------------------------------------------------
-void handler_Remove
+le_dls_List_t* handler_Remove
 (
     hub_HandlerRef_t handlerRef
 );
