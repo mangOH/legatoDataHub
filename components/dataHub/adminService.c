@@ -258,7 +258,16 @@ static hub_HandlerRef_t AddPushHandler
         return NULL;
     }
 
-    return resTree_AddPushHandler(resRef, dataType, callbackPtr, contextPtr);
+    hub_HandlerRef_t handlerRef = resTree_AddPushHandler(resRef, dataType, callbackPtr, contextPtr);
+
+    // If the resource has a current value call the push handler now (if it's a data type match).
+    dataSample_Ref_t sampleRef = resTree_GetCurrentValue(resRef);
+    if (sampleRef != NULL)
+    {
+        handler_Call(handlerRef, resTree_GetDataType(resRef), sampleRef);
+    }
+
+    return handlerRef;
 }
 
 
