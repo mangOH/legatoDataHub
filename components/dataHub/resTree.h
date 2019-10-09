@@ -218,9 +218,8 @@ resTree_EntryRef_t resTree_GetResource
  * If there's already a Namespace or Placeholder at the given path, it will be deleted and
  * replaced by an Input.
  *
- * @return Reference to the object, or NULL if the path is malformed, an Output or Observation
- *         already exists at that location, or an Input with different units or data type already
- *         exists at that location.
+ * @return Reference to the object, or NULL if the path is malformed or an Input, Output, or
+ *         Observation already exists at that location.
  */
 //--------------------------------------------------------------------------------------------------
 resTree_EntryRef_t resTree_GetInput
@@ -241,9 +240,8 @@ resTree_EntryRef_t resTree_GetInput
  * If there's already a Namespace or Placeholder at the given path, it will be deleted and
  * replaced by an Output.
  *
- * @return Reference to the object, or NULL if the path is malformed, an Input or Observation
- *         already exists at that location, or an Output with different units or data type already
- *         exists at that location.
+ * @return Reference to the object, or NULL if the path is malformed or an Input, Output, or
+ *         Observation already exists at that location.
  */
 //--------------------------------------------------------------------------------------------------
 resTree_EntryRef_t resTree_GetOutput

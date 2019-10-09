@@ -524,9 +524,8 @@ resTree_EntryRef_t resTree_GetResource
  * If there's already a Namespace or Placeholder at the given path, it will be deleted and
  * replaced by an Input.
  *
- * @return Reference to the object, or NULL if the path is malformed, an Output or Observation
- *         already exists at that location, or an Input with different units or data type already
- *         exists at that location.
+ * @return Reference to the object, or NULL if the path is malformed or an Input, Output, or
+ *         Observation already exists at that location.
  */
 //--------------------------------------------------------------------------------------------------
 resTree_EntryRef_t resTree_GetInput
@@ -594,9 +593,8 @@ resTree_EntryRef_t resTree_GetInput
  * If there's already a Namespace or Placeholder at the given path, it will be deleted and
  * replaced by an Output.
  *
- * @return Reference to the object, or NULL if the path is malformed, an Input or Observation
- *         already exists at that location, or an Output with different units or data type already
- *         exists at that location.
+ * @return Reference to the object, or NULL if the path is malformed or an Input, Output, or
+ *         Observation already exists at that location.
  */
 //--------------------------------------------------------------------------------------------------
 resTree_EntryRef_t resTree_GetOutput
@@ -1045,7 +1043,9 @@ void resTree_DeleteIO
         le_mem_Release(ioPtr);
 
         // Release the resource tree entry.
-        // This will cause it to be removed from the resource tree.
+        // This will cause it to be removed from the resource tree, if it doesn't have any
+        // children.  If it does have children, however, then each child holds a reference
+        // count on its parent, so the parent will remain until all the children are deleted.
         le_mem_Release(entryRef);
     }
 }
@@ -1071,8 +1071,10 @@ void resTree_DeleteObservation
     obsEntry->resourcePtr = NULL;
     obsEntry->type = ADMIN_ENTRY_TYPE_NAMESPACE;
 
-    // Release the namespace (resource tree entry).  This will cause it to be removed from the
-    // resource tree.
+    // Release the namespace (resource tree entry).
+    // This will cause it to be removed from the resource tree, if it doesn't have any
+    // children.  If it does have children, however, then each child holds a reference
+    // count on its parent, so the parent will remain until all the children are deleted.
     le_mem_Release(obsEntry);
 }
 
