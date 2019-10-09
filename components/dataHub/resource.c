@@ -759,7 +759,7 @@ void res_MoveAdminSettings
         if (srcPtr->currentValue != NULL)
         {
             // If the data type is a match for the new resource, move the current value over.
-            if (srcPtr->currentType == destPtr->currentType)
+            if (srcPtr->currentType == ioPoint_GetDataType(destPtr))
             {
                 destPtr->currentValue = srcPtr->currentValue;
                 srcPtr->currentValue = NULL; // dest took the reference count
