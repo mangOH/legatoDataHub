@@ -1734,11 +1734,10 @@ dataSample_Ref_t obs_ApplyTransform
     dataSample_Ref_t sample = sampleRef;
     double transformVal;
 
-
     switch (obsPtr->transformType)
     {
         case OBS_TRANSFORM_TYPE_NONE:
-            break;
+            return sample;
 
         case OBS_TRANSFORM_TYPE_MEAN:
             transformVal = obs_QueryMean(resPtr, NAN);
