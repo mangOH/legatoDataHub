@@ -174,7 +174,6 @@ static void CallPushHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-
     if (handlerPtr->dataType == dataType)
     {
         double timestamp = dataSample_GetTimestamp(sampleRef);
