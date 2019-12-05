@@ -1218,7 +1218,8 @@ static void CleanUp
         child = nextChild;
     }
 
-    switch (resTree_GetEntryType(resource))
+    admin_EntryType_t entryType = resTree_GetEntryType(resource);
+    switch (entryType)
     {
         case ADMIN_ENTRY_TYPE_NAMESPACE:
         case ADMIN_ENTRY_TYPE_PLACEHOLDER:
@@ -1226,7 +1227,7 @@ static void CleanUp
             // These don't need to be deleted.
             // A Namespace will automatically be cleaned up when all its children go away.
             // A Placeholder should be kept until the Admin app removes all its admin settings.
-            break;
+            return;
 
         case ADMIN_ENTRY_TYPE_INPUT:
         case ADMIN_ENTRY_TYPE_OUTPUT:
@@ -1234,15 +1235,17 @@ static void CleanUp
             // If this is an Input or Output resource, delete it now.
             // This will convert it to a Placeholder if it has administrative settings.
             resTree_DeleteIO(resource);
-            break;
+            return;
 
         case ADMIN_ENTRY_TYPE_OBSERVATION:
         case ADMIN_ENTRY_TYPE_NONE:
 
             // These should never be seen in an I/O API app namespace.
             LE_FATAL("Unexpected resource type found in app's namespace.");
-            break;
+            return;
     }
+
+    LE_FATAL("Invalid resource tree entry type %d.", entryType);
 }
 
 
