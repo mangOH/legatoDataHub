@@ -228,6 +228,7 @@ static resTree_EntryRef_t GoToEntry
     resTree_EntryRef_t currentEntry = baseNamespace;
 
     size_t i = 0;   // Index into path.
+    bool created = false; // true = a new entry object was created.
 
     while (path[i] != '\0')
     {
@@ -272,6 +273,15 @@ static resTree_EntryRef_t GoToEntry
             if (doCreate)
             {
                 childPtr = AddChild(currentEntry, entryName);
+
+                // AddChild() increments the ref count on the parent entry.
+                // If we created the parent entry, then its ref count is now too high by one.
+                if (created)
+                {
+                    le_mem_Release(currentEntry);
+                }
+
+                created = true;
             }
             else
             {
@@ -641,6 +651,7 @@ resTree_EntryRef_t resTree_GetOutput
     {
         // If a Namespace or Placeholder currently resides at that spot in the tree, replace it with
         // an Output.
+        // NOTE: If a new entry was created for this, it will be a Namespace entry.
         case ADMIN_ENTRY_TYPE_NAMESPACE:
         case ADMIN_ENTRY_TYPE_PLACEHOLDER:
         {
@@ -705,6 +716,7 @@ resTree_EntryRef_t resTree_GetObservation
 
     // If a Namespace or Placeholder currently resides at that spot in the tree, replace it with
     // an Observation.
+    // NOTE: If a new entry was created for this, it will be a Namespace entry.
     switch (entryRef->type)
     {
         case ADMIN_ENTRY_TYPE_NAMESPACE:
