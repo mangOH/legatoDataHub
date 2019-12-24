@@ -258,7 +258,16 @@ static hub_HandlerRef_t AddPushHandler
         return NULL;
     }
 
-    return resTree_AddPushHandler(resRef, dataType, callbackPtr, contextPtr);
+    hub_HandlerRef_t handlerRef = resTree_AddPushHandler(resRef, dataType, callbackPtr, contextPtr);
+
+    // If the resource has a current value call the push handler now (if it's a data type match).
+    dataSample_Ref_t sampleRef = resTree_GetCurrentValue(resRef);
+    if (sampleRef != NULL)
+    {
+        handler_Call(handlerRef, resTree_GetDataType(resRef), sampleRef);
+    }
+
+    return handlerRef;
 }
 
 
@@ -671,13 +680,25 @@ void admin_DeleteObs
 )
 //--------------------------------------------------------------------------------------------------
 {
+    // Verify that the path is within the /obs namespace, and if it's an absolute path, convert
+    // it into a relative path.
+    if (strncmp(path, "/obs/", 5) == 0)
+    {
+        path += 5;
+    }
+    else if (path[0] == '/')
+    {
+        LE_ERROR("Path is outside the /obs/ namespace (%s).", path);
+        return;
+    }
+
     resTree_EntryRef_t obsNamespace = resTree_FindEntry(resTree_GetRoot(), "obs");
 
     if (obsNamespace != NULL)
     {
         resTree_EntryRef_t entry = resTree_FindEntry(obsNamespace, path);
 
-        if (entry != NULL)
+        if ((entry != NULL) && (resTree_GetEntryType(entry) == ADMIN_ENTRY_TYPE_OBSERVATION))
         {
             resTree_DeleteObservation(entry);
         }

@@ -42,13 +42,11 @@ extern:
 
     dhubToolAdmin = dhub.adminTool.admin
     dhubToolQuery = dhub.adminTool.query
-    dhubToolIo = dhub.adminTool.io
 }
 
 bindings:
 {
     dhub.adminTool.admin -> hubd.dataHub.admin
     dhub.adminTool.query -> hubd.dataHub.query
-    dhub.adminTool.io -> hubd.dataHub.io
     hubd.dataHub.le_appInfo -> <root>.le_appInfo
 }
