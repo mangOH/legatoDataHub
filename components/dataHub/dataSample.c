@@ -474,7 +474,7 @@ dataSample_Ref_t dataSample_ExtractJson
 )
 //--------------------------------------------------------------------------------------------------
 {
-    char resultBuff[IO_MAX_STRING_VALUE_LEN + 1];
+    char resultBuff[HUB_MAX_STRING_BYTES];
     json_DataType_t jsonType;
 
     le_result_t result = json_Extract(resultBuff,

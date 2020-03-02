@@ -235,7 +235,7 @@ static void CallPushHandler
     }
     else if (handlerPtr->dataType == IO_DATA_TYPE_STRING)
     {
-        char value[IO_MAX_STRING_VALUE_LEN];
+        char value[HUB_MAX_STRING_BYTES];
         if (LE_OK != dataSample_ConvertToString(sampleRef,
                                                 dataType,
                                                 value,
@@ -255,7 +255,7 @@ static void CallPushHandler
     }
     else if (handlerPtr->dataType == IO_DATA_TYPE_JSON)
     {
-        char value[IO_MAX_STRING_VALUE_LEN];
+        char value[HUB_MAX_STRING_BYTES];
         if (LE_OK != dataSample_ConvertToJson(sampleRef,
                                               dataType,
                                               value,

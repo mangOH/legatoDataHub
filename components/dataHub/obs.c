@@ -118,7 +118,7 @@ BufferEntry_t;
 /// The timestamp is a double-precision floating point number. Doubles can be
 /// hundreds of bytes long if the maximum precision is used in non-scientific notation,
 /// but in this case they typically won't be more than 6 decimal places.
-#define READ_OP_BUFF_BYTES (IO_MAX_STRING_VALUE_LEN + 48)
+#define READ_OP_BUFF_BYTES (HUB_MAX_STRING_BYTES + 48)
 
 
 //--------------------------------------------------------------------------------------------------
@@ -232,7 +232,7 @@ static void DeleteBackup
 )
 //--------------------------------------------------------------------------------------------------
 {
-    char path[IO_MAX_RESOURCE_PATH_LEN];
+    char path[HUB_MAX_RESOURCE_PATH_BYTES];
     le_result_t result = GetBackupFilePath(path, sizeof(path), obsPtr);
     if (result == LE_OK)
     {
@@ -764,6 +764,7 @@ static void TruncateBuffer
     while (obsPtr->count > count)
     {
         le_sls_Link_t* linkPtr = le_sls_Pop(&obsPtr->sampleList);
+        LE_ASSERT(linkPtr != NULL);
 
         le_mem_Release(CONTAINER_OF(linkPtr, BufferEntry_t, link));
 
@@ -1130,7 +1131,7 @@ static void ReadSamplesFromFile
             }
             case IO_DATA_TYPE_STRING:
             {
-                char value[IO_MAX_STRING_VALUE_LEN + 1];
+                char value[HUB_MAX_STRING_BYTES];
 
                 uint32_t stringLen;
                 if (ReadFromFile(&stringLen, 4, file) != LE_OK)
@@ -1157,7 +1158,7 @@ static void ReadSamplesFromFile
             }
             case IO_DATA_TYPE_JSON:
             {
-                char value[IO_MAX_STRING_VALUE_LEN + 1];
+                char value[HUB_MAX_STRING_BYTES];
 
                 uint32_t stringLen;
                 if (ReadFromFile(&stringLen, 4, file) != LE_OK)
