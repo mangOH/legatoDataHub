@@ -30,34 +30,42 @@ typedef struct DataSample
     /// frequently than Resources
     union
     {
-        bool boolean;
-        double numeric;
-        char string[0]; ///< A string type data sample has space for the array after this struct.
-                        ///< @warning This union MUST BE the LAST MEMBER of DataSample_t.
+        bool     boolean;
+        double   numeric;
+        char    *stringPtr;
     } value;
 }
 DataSample_t;
 
-/// The maximum number of bytes in a small string, including the null terminator.
-/// Strings longer than this are considered "huge".
-#define SMALL_STRING_BYTES 300
+/// Size of largest allowed strings in samples.
+#define STRING_LARGE_BYTES  HUB_MAX_STRING_BYTES
+/// Size of medium sized strings in samples.
+#define STRING_MED_BYTES    300
+/// Size of small strings in samples.
+#define STRING_SMALL_BYTES  50
 
-/// The number of bytes to allocate in a (small) String Data Sample Pool block.
-#define SMALL_STRING_SAMPLE_OBJECT_BYTES (offsetof(DataSample_t, value) + SMALL_STRING_BYTES)
+/// Default sample pool size.  This may be overridden in the .cdef.
+#define DEFAULT_SAMPLE_POOL_SIZE 1000
 
-/// The number of bytes to allocate in a Huge String Data Sample Pool block.
-#define HUGE_STRING_SAMPLE_OBJECT_BYTES (offsetof(DataSample_t, value) + HUB_MAX_STRING_BYTES)
+/// Default number of large string pool entries.  This may be overridden in the .cdef.
+#define DEFAULT_LARGE_STRING_POOL_SIZE 5
 
-/// Pool of Data Sample objects that don't hold strings.
-static le_mem_PoolRef_t NonStringSamplePool = NULL;
+/// Number of medium string pool entries.
+#define MED_STRING_POOL_SIZE                                                                \
+    (((LE_MEM_BLOCKS(StringPool, DEFAULT_LARGE_STRING_POOL_SIZE) / 2) * STRING_LARGE_BYTES) \
+        / STRING_MED_BYTES)
 
-/// Pool of Data Sample objects that hold strings.
-static le_mem_PoolRef_t SmallStringSamplePool = NULL;
+/// Number of small string pool entries.
+#define SMALL_STRING_POOL_SIZE \
+    (((MED_STRING_POOL_SIZE / 2) * STRING_MED_BYTES) / STRING_SMALL_BYTES)
 
-/// Pool of Data Sample objects that hold huge strings.
-/// @note This needs to be a separate pool because otherwise the majority case of small strings
-///       results in massive unnecessary memory consumption (internal fragmentation).
-static le_mem_PoolRef_t HugeStringSamplePool = NULL;
+/// Pool of Data Sample objects.
+static le_mem_PoolRef_t DataSamplePool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(DataSamplePool, DEFAULT_SAMPLE_POOL_SIZE, sizeof(DataSample_t));
+
+/// Pool for holding strings.
+static le_mem_PoolRef_t StringPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(StringPool, DEFAULT_LARGE_STRING_POOL_SIZE, STRING_LARGE_BYTES);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -383,28 +391,17 @@ void dataSample_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    NonStringSamplePool = le_mem_CreatePool("Data Sample", sizeof(DataSample_t));
+    le_mem_PoolRef_t layeredStringPool;
 
-    SmallStringSamplePool = le_mem_CreatePool("Small String Sample",
-                                              SMALL_STRING_SAMPLE_OBJECT_BYTES);
+    DataSamplePool = le_mem_InitStaticPool(DataSamplePool, DEFAULT_SAMPLE_POOL_SIZE,
+                        sizeof(DataSample_t));
 
-    HugeStringSamplePool = le_mem_CreatePool("Huge String Sample",
-                                             HUGE_STRING_SAMPLE_OBJECT_BYTES);
-}
-
-
-//--------------------------------------------------------------------------------------------------
-/**
- * @return True if a given string is shorter than SMALL_STRING_BYTES, including its null terminator.
- */
-//--------------------------------------------------------------------------------------------------
-static inline bool IsSmallString
-(
-    const char* string
-)
-//--------------------------------------------------------------------------------------------------
-{
-    return (strnlen(string, SMALL_STRING_BYTES) < SMALL_STRING_BYTES);
+    layeredStringPool = le_mem_InitStaticPool(StringPool, DEFAULT_LARGE_STRING_POOL_SIZE,
+                            STRING_LARGE_BYTES);
+    layeredStringPool = le_mem_CreateReducedPool(layeredStringPool, "MedStringPool",
+                            MED_STRING_POOL_SIZE, STRING_MED_BYTES);
+    StringPool = le_mem_CreateReducedPool(layeredStringPool, "SmallStringPool",
+                    SMALL_STRING_POOL_SIZE, STRING_SMALL_BYTES);
 }
 
 
@@ -424,7 +421,7 @@ static inline DataSample_t* CreateSample
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = le_mem_ForceAlloc(pool);
+    DataSample_t* samplePtr = le_mem_Alloc(pool);
 
     if (timestamp == IO_NOW)
     {
@@ -453,7 +450,7 @@ dataSample_Ref_t dataSample_CreateTrigger
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(NonStringSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
 
     return samplePtr;
 }
@@ -475,7 +472,7 @@ dataSample_Ref_t dataSample_CreateBoolean
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(NonStringSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
     samplePtr->value.boolean = value;
 
     return samplePtr;
@@ -498,7 +495,7 @@ dataSample_Ref_t dataSample_CreateNumeric
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(NonStringSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
     samplePtr->value.numeric = value;
 
     return samplePtr;
@@ -523,26 +520,11 @@ dataSample_Ref_t dataSample_CreateString
 )
 //--------------------------------------------------------------------------------------------------
 {
-    le_mem_PoolRef_t pool;
-    size_t maxSize;
-    if (IsSmallString(value))
-    {
-        pool = SmallStringSamplePool;
-        maxSize = SMALL_STRING_BYTES;
-    }
-    else
-    {
-        pool = HugeStringSamplePool;
-        maxSize = HUB_MAX_STRING_BYTES;
-    }
+    DataSample_t *samplePtr = CreateSample(DataSamplePool, timestamp);
 
-    DataSample_t* samplePtr = CreateSample(pool, timestamp);
-
-    if (LE_OK != le_utf8_Copy(samplePtr->value.string, value, maxSize, NULL))
-    {
-        LE_FATAL("String value longer than max permitted size of %d", maxSize);
-    }
-
+    samplePtr->value.stringPtr = le_mem_StrDup(StringPool, value);
+    LE_FATAL_IF(samplePtr->value.stringPtr == NULL,
+        "Could not allocate space for string of size %" PRIuS, le_utf8_NumBytes(value));
     return samplePtr;
 }
 
@@ -641,7 +623,7 @@ const char* dataSample_GetString
 )
 //--------------------------------------------------------------------------------------------------
 {
-    return sampleRef->value.string;
+    return sampleRef->value.stringPtr;
 }
 
 
@@ -662,7 +644,7 @@ const char* dataSample_GetJson
 {
     // The data type is not actually stored in the data sample itself, and
     // JSON values are stored in the same way that strings are.
-    return sampleRef->value.string;
+    return sampleRef->value.stringPtr;
 }
 
 
@@ -675,7 +657,7 @@ const char* dataSample_GetJson
  *  - LE_OVERFLOW if the buffer provided is too small to hold the value.
  */
 //--------------------------------------------------------------------------------------------------
-const le_result_t dataSample_ConvertToString
+le_result_t dataSample_ConvertToString
 (
     dataSample_Ref_t sampleRef,
     io_DataType_t dataType, ///< [IN] The data type of the data sample.
@@ -731,13 +713,13 @@ const le_result_t dataSample_ConvertToString
         case IO_DATA_TYPE_STRING:
         {
             // Already in String format, just copy it into the buffer.
-            return le_utf8_Copy(valueBuffPtr, sampleRef->value.string, valueBuffSize, NULL);
+            return le_utf8_Copy(valueBuffPtr, sampleRef->value.stringPtr, valueBuffSize, NULL);
         }
 
         case IO_DATA_TYPE_JSON:
         {
             // We need to unescape the string
-            return dataSample_JsonToString(valueBuffPtr, sampleRef->value.string, valueBuffSize, NULL);
+            return dataSample_JsonToString(valueBuffPtr, sampleRef->value.stringPtr, valueBuffSize, NULL);
         }
     }
 
@@ -754,7 +736,7 @@ const le_result_t dataSample_ConvertToString
  *  - LE_OVERFLOW if the buffer provided is too small to hold the value.
  */
 //--------------------------------------------------------------------------------------------------
-const le_result_t dataSample_ConvertToJson
+le_result_t dataSample_ConvertToJson
 (
     dataSample_Ref_t sampleRef,
     io_DataType_t dataType, ///< [IN] The data type of the data sample.
@@ -790,7 +772,7 @@ const le_result_t dataSample_ConvertToJson
                 i = snprintf(valueBuffPtr, valueBuffSize, "false");
             }
 
-            if (i >= valueBuffSize)
+            if (i >= (int) valueBuffSize)
             {
                 return LE_OVERFLOW;
             }
@@ -799,10 +781,8 @@ const le_result_t dataSample_ConvertToJson
 
         case IO_DATA_TYPE_NUMERIC:
 
-            if (valueBuffSize <= snprintf(valueBuffPtr,
-                                          valueBuffSize,
-                                          "%lf",
-                                          sampleRef->value.numeric))
+            if ((int) valueBuffSize <= snprintf(valueBuffPtr, valueBuffSize, "%lf",
+                                                sampleRef->value.numeric))
             {
                 return LE_OVERFLOW;
             }
@@ -819,7 +799,7 @@ const le_result_t dataSample_ConvertToJson
             valueBuffPtr[0] = '"';
             valueBuffPtr++;
             valueBuffSize--;
-            result = dataSample_StringToJson(valueBuffPtr, sampleRef->value.string, valueBuffSize, &len);
+            result = dataSample_StringToJson(valueBuffPtr, sampleRef->value.stringPtr, valueBuffSize, &len);
             if ((result != LE_OK) || (len >= (valueBuffSize - 1)))  // need 1 more for the last '"'
             {
                 return LE_OVERFLOW;
@@ -831,7 +811,7 @@ const le_result_t dataSample_ConvertToJson
         case IO_DATA_TYPE_JSON:
 
             // Already in JSON format, just copy it into the buffer.
-            return le_utf8_Copy(valueBuffPtr, sampleRef->value.string, valueBuffSize, NULL);
+            return le_utf8_Copy(valueBuffPtr, sampleRef->value.stringPtr, valueBuffSize, NULL);
     }
 
     LE_ERROR("Invalid data type %d.", dataType);
@@ -926,27 +906,13 @@ dataSample_Ref_t dataSample_Copy
 )
 //--------------------------------------------------------------------------------------------------
 {
-    le_mem_PoolRef_t pool;
+    dataSample_Ref_t duplicate = le_mem_Alloc(DataSamplePool);
 
+    *duplicate = *original;
     if ((dataType == IO_DATA_TYPE_STRING) || (dataType == IO_DATA_TYPE_JSON))
     {
-        if (IsSmallString(original->value.string))
-        {
-            pool = SmallStringSamplePool;
-        }
-        else
-        {
-            pool = HugeStringSamplePool;
-        }
+        duplicate->value.stringPtr = le_mem_StrDup(StringPool, original->value.stringPtr);
     }
-    else
-    {
-        pool = NonStringSamplePool;
-    }
-
-    dataSample_Ref_t duplicate = le_mem_ForceAlloc(pool);
-
-    memcpy(duplicate, original, le_mem_GetObjectSize(pool));
 
     return duplicate;
 }
