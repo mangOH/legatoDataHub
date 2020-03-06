@@ -32,12 +32,15 @@ typedef struct resTree_Entry
 }
 Entry_t;
 
+/// Default number of resource tree entries.  This can be overridden in the .cdef.
+#define DEFAULT_RESOURCE_TREE_ENTRY_POOL_SIZE 10
 
 /// Pointer to the Root object (the root of the resource tree).
 static Entry_t* RootPtr;
 
 /// Pool of Entry objects.
 static le_mem_PoolRef_t EntryPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(EntryPool, DEFAULT_RESOURCE_TREE_ENTRY_POOL_SIZE, sizeof(Entry_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -54,7 +57,7 @@ static Entry_t* AddChild
 )
 //--------------------------------------------------------------------------------------------------
 {
-    Entry_t* entryPtr = le_mem_ForceAlloc(EntryPool);
+    Entry_t* entryPtr = le_mem_Alloc(EntryPool);
 
     entryPtr->link = LE_DLS_LINK_INIT;
 
@@ -124,7 +127,8 @@ void resTree_Init
 //--------------------------------------------------------------------------------------------------
 {
     // Create the Namespace Pool (note: Namespaces are just instances of Entry_t).
-    EntryPool = le_mem_CreatePool("Res Tree Entry", sizeof(Entry_t));
+    EntryPool = le_mem_InitStaticPool(EntryPool, DEFAULT_RESOURCE_TREE_ENTRY_POOL_SIZE,
+                    sizeof(Entry_t));
     le_mem_SetDestructor(EntryPool, EntryDestructor);
 
     // Create the Root Namespace.

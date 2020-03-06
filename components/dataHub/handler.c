@@ -28,6 +28,11 @@ typedef struct handler
 }
 Handler_t;
 
+/// Default number of push handlers.  This can be overridden in the .cdef.
+#define DEFAULT_PUSH_HANDLER_POOL_SIZE  10
+
+/// Size of the push handler reference map.
+#define PUSH_HANDLER_MAP_SIZE           LE_MEM_BLOCKS(HandlerPool, DEFAULT_PUSH_HANDLER_POOL_SIZE)
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -35,6 +40,7 @@ Handler_t;
  */
 //--------------------------------------------------------------------------------------------------
 static le_mem_PoolRef_t HandlerPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(HandlerPool, DEFAULT_PUSH_HANDLER_POOL_SIZE, sizeof(Handler_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -44,6 +50,7 @@ static le_mem_PoolRef_t HandlerPool = NULL;
  */
 //--------------------------------------------------------------------------------------------------
 static le_ref_MapRef_t HandlerRefMap = NULL;
+LE_REF_DEFINE_STATIC_MAP(HandlerRefMap, PUSH_HANDLER_MAP_SIZE);
 
 
 //--------------------------------------------------------------------------------------------------
@@ -59,9 +66,10 @@ void handler_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    HandlerPool = le_mem_CreatePool("Push Handler", sizeof(Handler_t));
+    HandlerPool = le_mem_InitStaticPool(HandlerPool, DEFAULT_PUSH_HANDLER_POOL_SIZE,
+                    sizeof(Handler_t));
 
-    HandlerRefMap = le_ref_CreateMap("Push Handler", 23 /* totally arbitrary; make configurable */);
+    HandlerRefMap = le_ref_InitStaticMap(HandlerRefMap, PUSH_HANDLER_MAP_SIZE);
 }
 
 
@@ -81,7 +89,7 @@ hub_HandlerRef_t handler_Add
 )
 //--------------------------------------------------------------------------------------------------
 {
-    Handler_t* handlerPtr = le_mem_ForceAlloc(HandlerPool);
+    Handler_t* handlerPtr = le_mem_Alloc(HandlerPool);
 
     handlerPtr->link = LE_DLS_LINK_INIT;
     handlerPtr->safeRef = le_ref_CreateRef(HandlerRefMap, handlerPtr);

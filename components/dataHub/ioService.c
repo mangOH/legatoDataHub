@@ -34,6 +34,8 @@ UpdateStartEndHandler_t;
 //--------------------------------------------------------------------------------------------------
 static le_dls_List_t UpdateStartEndHandlerList = LE_DLS_LIST_INIT;
 
+/// Default number of update handlers.  This can be overridden in the .cdef.
+#define DEFAULT_UPDATE_HANDLER_POOL_SIZE 5
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -41,6 +43,9 @@ static le_dls_List_t UpdateStartEndHandlerList = LE_DLS_LIST_INIT;
  */
 //--------------------------------------------------------------------------------------------------
 static le_mem_PoolRef_t UpdateStartEndHandlerPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(UpdateStartEndHandlerPool,
+                          DEFAULT_UPDATE_HANDLER_POOL_SIZE,
+                          sizeof(UpdateStartEndHandler_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -984,6 +989,8 @@ le_result_t io_GetBoolean
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1024,6 +1031,8 @@ le_result_t io_GetNumeric
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1067,6 +1076,8 @@ le_result_t io_GetString
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1108,6 +1119,8 @@ le_result_t io_GetJson
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1139,7 +1152,7 @@ io_UpdateStartEndHandlerRef_t io_AddUpdateStartEndHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    UpdateStartEndHandler_t* handlerPtr = le_mem_ForceAlloc(UpdateStartEndHandlerPool);
+    UpdateStartEndHandler_t* handlerPtr = le_mem_Alloc(UpdateStartEndHandlerPool);
 
     handlerPtr->link = LE_DLS_LINK_INIT;
 
@@ -1293,8 +1306,9 @@ void ioService_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    UpdateStartEndHandlerPool = le_mem_CreatePool("UpdateStartEndHandlers",
-                                                  sizeof(UpdateStartEndHandler_t));
+    UpdateStartEndHandlerPool = le_mem_InitStaticPool(UpdateStartEndHandlerPool,
+                                                      DEFAULT_UPDATE_HANDLER_POOL_SIZE,
+                                                      sizeof(UpdateStartEndHandler_t));
 
     // Register for notification of client sessions closing, so we can convert Input and Output
     // objects into placeholders (or delete them) when the clients that created them go away.

@@ -40,7 +40,10 @@
 #include "resTree.h"
 #include "json.h"
 #include "obs.h"
-#include <ftw.h>
+
+#if LE_CONFIG_LINUX
+#   include <ftw.h>
+#endif
 
 #ifdef LEGATO_EMBEDDED
  #define BACKUP_DIR "/home/root/dataHubBackup/"
@@ -58,6 +61,13 @@
 
 /// Number of seconds in 30 years.
 #define THIRTY_YEARS 946684800.0
+
+/// Default number of observations.  This can be overridden in the .cdef.
+#define DEFAULT_OBSERVATION_POOL_SIZE       5
+/// Default number of buffer entries.  This can be overridden in the .cdef.
+#define DEFAULT_BUFFER_ENTRY_POOL_SIZE      5
+/// Default number of read operations.  This can be overridden in the .cdef.
+#define DEFAULT_READ_OPERATION_POOL_SIZE    2
 
 /// Observation Resource.  Allocated from the Observation Pool.
 typedef struct
@@ -135,12 +145,17 @@ ReadOperation_t;
 
 /// Pool of Observation objects.
 static le_mem_PoolRef_t ObservationPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(ObservationPool, DEFAULT_OBSERVATION_POOL_SIZE, sizeof(Observation_t));
 
 /// Pool of Buffer Entry objects.
 static le_mem_PoolRef_t BufferEntryPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(BufferEntryPool, DEFAULT_BUFFER_ENTRY_POOL_SIZE, sizeof(BufferEntry_t));
 
 /// Pool to allocate ReadOperation_t object from.
 static le_mem_PoolRef_t ReadOperationPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(ReadOperationPool,
+                          DEFAULT_READ_OPERATION_POOL_SIZE,
+                          sizeof(ReadOperation_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -413,7 +428,7 @@ static bool LoadReadOpBuffer
                            sizeof(opPtr->writeBuffer),
                            "{\"t\":%lf,\"v\":",
                            dataSample_GetTimestamp(opPtr->nextEntryPtr->sampleRef));
-        if (len >= sizeof(opPtr->writeBuffer))
+        if (len >= (int) sizeof(opPtr->writeBuffer))
         {
             LE_CRIT("Buffer overflow. Skipping entry.");
             // Leave the writeLen 0 so we'll loop around and try the next sample.
@@ -621,6 +636,8 @@ static void ReadOpFdEventHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(fd);
+
     ReadOperation_t* opPtr = le_fdMonitor_GetContextPtr();
 
     // Check for error or hang-up.
@@ -660,7 +677,7 @@ static void StartRead
         return;
     }
 
-    ReadOperation_t* opPtr = le_mem_ForceAlloc(ReadOperationPool);
+    ReadOperation_t* opPtr = le_mem_Alloc(ReadOperationPool);
 
     opPtr->link = LE_DLS_LINK_INIT;
     le_dls_Queue(&obsPtr->readOpList, &opPtr->link);
@@ -720,7 +737,7 @@ static void AddToBuffer
         }
     }
 
-    buffEntryPtr = le_mem_ForceAlloc(BufferEntryPool);
+    buffEntryPtr = le_mem_Alloc(BufferEntryPool);
 
     le_mem_AddRef(sampleRef);
     buffEntryPtr->sampleRef = sampleRef;
@@ -805,6 +822,7 @@ static dataSample_Ref_t UpdateSample
 }
 
 
+#if LE_CONFIG_FILESYSTEM
 //--------------------------------------------------------------------------------------------------
 /**
  * Writes a buffer load of data to a buffered file stream.
@@ -1180,6 +1198,7 @@ error:
     // On error, dump the buffer contents in case we read some corrupted samples from the file.
     TruncateBuffer(obsPtr, 0);
 }
+#endif /* end LE_CONFIG_FILESYSTEM */
 
 
 //--------------------------------------------------------------------------------------------------
@@ -1204,6 +1223,7 @@ static void Backup
     le_clk_Time_t now = le_clk_GetRelativeTime();
     obsPtr->lastBackupTime = now.sec;
 
+#if LE_CONFIG_FILESYSTEM
     // Get the backup file path.
     char path[MAX_BACKUP_FILE_PATH_BYTES];
     if (GetBackupFilePath(path, sizeof(path), obsPtr) != LE_OK)
@@ -1277,6 +1297,9 @@ static void Backup
     {
         LE_CRIT("Failed to save '%s' (%s).", path, LE_RESULT_TXT(result));
     }
+#else /* !LE_CONFIG_FILESYSTEM */
+    // TODO: implement non-volatile storage without a filesystem.
+#endif /* end !LE_CONFIG_FILESYSTEM */
 
     LE_DEBUG("Backup complete.");
 }
@@ -1341,13 +1364,17 @@ void obs_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    ObservationPool = le_mem_CreatePool("Observation", sizeof(Observation_t));
+    ObservationPool = le_mem_InitStaticPool(ObservationPool, DEFAULT_OBSERVATION_POOL_SIZE,
+                        sizeof(Observation_t));
     le_mem_SetDestructor(ObservationPool, ObservationDestructor);
 
-    BufferEntryPool = le_mem_CreatePool("Buffer Entry", sizeof(BufferEntry_t));
+    BufferEntryPool = le_mem_InitStaticPool(BufferEntryPool, DEFAULT_BUFFER_ENTRY_POOL_SIZE,
+                        sizeof(BufferEntry_t));
     le_mem_SetDestructor(BufferEntryPool, BufferEntryDestructor);
 
-    ReadOperationPool = le_mem_CreatePool("Read Op", sizeof(ReadOperation_t));
+    ReadOperationPool = le_mem_InitStaticPool(ReadOperationPool,
+                                              DEFAULT_READ_OPERATION_POOL_SIZE,
+                                              sizeof(ReadOperation_t));
 }
 
 
@@ -1365,7 +1392,7 @@ res_Resource_t* obs_Create
 )
 //--------------------------------------------------------------------------------------------------
 {
-    Observation_t* obsPtr = le_mem_ForceAlloc(ObservationPool);
+    Observation_t* obsPtr = le_mem_Alloc(ObservationPool);
 
     res_Construct(&obsPtr->resource, entryRef);
 
@@ -1406,6 +1433,7 @@ void obs_RestoreBackup
 )
 //--------------------------------------------------------------------------------------------------
 {
+#if LE_CONFIG_FILESYSTEM
     Observation_t* obsPtr = CONTAINER_OF(resPtr, Observation_t, resource);
 
     // If there's no backup directory yet, then we know there are no backups, so don't
@@ -1481,6 +1509,10 @@ void obs_RestoreBackup
 
     // Read all the data samples from the file.
     ReadSamplesFromFile(obsPtr, file, count);
+#else /* !LE_CONFIG_FILESYSTEM */
+    // TODO: read from non-volatile storage without a filesystem.
+    LE_UNUSED(resPtr);
+#endif /* end !LE_CONFIG_FILESYSTEM */
 }
 
 
@@ -2136,6 +2168,7 @@ uint32_t obs_GetBufferBackupPeriod
 }
 
 
+#if LE_CONFIG_LINUX
 //--------------------------------------------------------------------------------------------------
 /**
  * Function that gets called for each file system object (file, directory, symlink, etc.) found
@@ -2231,6 +2264,7 @@ static int BackupDirTreeWalkCallback
 
     return -1;
 }
+#endif /* end LE_CONFIG_LINUX */
 
 
 //--------------------------------------------------------------------------------------------------
@@ -2244,6 +2278,7 @@ void obs_DeleteUnusedBackupFiles
 )
 //--------------------------------------------------------------------------------------------------
 {
+#if LE_CONFIG_LINUX
     LE_DEBUG("Cleaning up unused buffer backup files.");
 
     // Walk the directory tree under the backup directory.
@@ -2269,6 +2304,7 @@ void obs_DeleteUnusedBackupFiles
             LE_CRIT("Failed to traverse backup directory '%s' (%m)", BACKUP_DIR);
         }
     }
+#endif /* end LE_CONFIG_LINUX */
 }
 
 

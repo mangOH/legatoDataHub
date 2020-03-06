@@ -399,7 +399,7 @@ static le_result_t GoToElement
     valPtr = SkipWhitespace(valPtr);
 
     // Until we find the ith entry, skip values and the commas after them.
-    for (size_t i = 0; i != index; i++)
+    for (long i = 0; i != index; i++)
     {
         if (*valPtr == ']')
         {
@@ -588,8 +588,7 @@ static le_result_t Find
 
                 specPtr++;
 
-                // *** FALL THROUGH ***
-
+                /* fallthrough */
             default:
             {
                 if (!isalpha(*specPtr))
