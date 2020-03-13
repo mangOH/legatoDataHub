@@ -325,7 +325,7 @@ void io_PushTrigger
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_ERROR("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -358,7 +358,7 @@ void io_PushBoolean
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_ERROR("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -391,7 +391,7 @@ void io_PushNumeric
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_ERROR("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -424,7 +424,7 @@ void io_PushString
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_ERROR("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -456,7 +456,7 @@ void io_PushJson
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_ERROR("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
