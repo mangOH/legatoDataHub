@@ -495,7 +495,7 @@ static hub_HandlerRef_t AddPushHandler
     resTree_EntryRef_t nsRef = hub_GetClientNamespace(io_GetClientSessionRef());
     if (nsRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to register a push handler before creating any resources.");
+        LE_CRIT("Client tried to register a push handler before creating any resources.");
         return NULL;
     }
 
@@ -503,18 +503,18 @@ static hub_HandlerRef_t AddPushHandler
 
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to register Push handler on non-existent resource '/app/%s/%s'.",
-                       resTree_GetEntryName(nsRef),
-                       path);
+        LE_CRIT("Attempt to register Push handler on non-existent resource '/app/%s/%s'.",
+                resTree_GetEntryName(nsRef),
+                path);
         return NULL;
     }
 
     admin_EntryType_t entryType = resTree_GetEntryType(resRef);
     if ((entryType != ADMIN_ENTRY_TYPE_INPUT) && (entryType != ADMIN_ENTRY_TYPE_OUTPUT))
     {
-        LE_KILL_CLIENT("Attempt to register Push handler before creating resource '/app/%s/%s'.",
-                       resTree_GetEntryName(nsRef),
-                       path);
+        LE_CRIT("Attempt to register Push handler before creating resource '/app/%s/%s'.",
+                resTree_GetEntryName(nsRef),
+                path);
         return NULL;
     }
 

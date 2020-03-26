@@ -1021,7 +1021,7 @@ static hub_HandlerRef_t AddPushHandler
     resTree_EntryRef_t resRef = resTree_GetResource(resTree_GetRoot(), path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Bad resource path '%s'.", path);
+        LE_CRIT("Bad resource path '%s'.", path);
         return NULL;
     }
 
