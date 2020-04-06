@@ -1007,6 +1007,7 @@ le_result_t query_GetJsonExample
  * be created.
  *
  * @return A reference to the handler, which can be removed using handler_Remove().
+ *         NULL on error.
  */
 //--------------------------------------------------------------------------------------------------
 static hub_HandlerRef_t AddPushHandler
@@ -1021,7 +1022,7 @@ static hub_HandlerRef_t AddPushHandler
     resTree_EntryRef_t resRef = resTree_GetResource(resTree_GetRoot(), path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Bad resource path '%s'.", path);
+        LE_CRIT("Bad resource path '%s'.", path);
         return NULL;
     }
 

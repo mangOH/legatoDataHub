@@ -320,7 +320,7 @@ void io_PushTrigger
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_CRIT("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -353,7 +353,7 @@ void io_PushBoolean
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_CRIT("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -386,7 +386,7 @@ void io_PushNumeric
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_CRIT("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -419,7 +419,7 @@ void io_PushString
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_CRIT("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -451,7 +451,7 @@ void io_PushJson
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to push data to a non-existent resource '%s'.", path);
+        LE_CRIT("Client tried to push data to a non-existent resource '%s'.", path);
         return;
     }
 
@@ -490,7 +490,7 @@ static hub_HandlerRef_t AddPushHandler
     resTree_EntryRef_t nsRef = hub_GetClientNamespace(io_GetClientSessionRef());
     if (nsRef == NULL)
     {
-        LE_KILL_CLIENT("Client tried to register a push handler before creating any resources.");
+        LE_CRIT("Client tried to register a push handler before creating any resources.");
         return NULL;
     }
 
@@ -498,18 +498,18 @@ static hub_HandlerRef_t AddPushHandler
 
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to register Push handler on non-existent resource '/app/%s/%s'.",
-                       resTree_GetEntryName(nsRef),
-                       path);
+        LE_CRIT("Attempt to register Push handler on non-existent resource '/app/%s/%s'.",
+                resTree_GetEntryName(nsRef),
+                path);
         return NULL;
     }
 
     admin_EntryType_t entryType = resTree_GetEntryType(resRef);
     if ((entryType != ADMIN_ENTRY_TYPE_INPUT) && (entryType != ADMIN_ENTRY_TYPE_OUTPUT))
     {
-        LE_KILL_CLIENT("Attempt to register Push handler before creating resource '/app/%s/%s'.",
-                       resTree_GetEntryName(nsRef),
-                       path);
+        LE_CRIT("Attempt to register Push handler before creating resource '/app/%s/%s'.",
+                resTree_GetEntryName(nsRef),
+                path);
         return NULL;
     }
 
@@ -738,11 +738,11 @@ void io_MarkOptional
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to mark non-existent resource optional at '%s'.", path);
+        LE_CRIT("Attempt to mark non-existent resource optional at '%s'.", path);
     }
     else if (resTree_GetEntryType(resRef) != ADMIN_ENTRY_TYPE_OUTPUT)
     {
-        LE_KILL_CLIENT("Attempt to mark non-Output resource optional at '%s'.", path);
+        LE_CRIT("Attempt to mark non-Output resource optional at '%s'.", path);
     }
     else
     {
@@ -770,11 +770,11 @@ void io_SetBooleanDefault
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to set default value of non-existent resource '%s'.", path);
+        LE_CRIT("Attempt to set default value of non-existent resource '%s'.", path);
     }
     else if (resTree_GetDataType(resRef) != IO_DATA_TYPE_BOOLEAN)
     {
-        LE_KILL_CLIENT("Attempt to set default value to wrong type for resource '%s'.", path);
+        LE_CRIT("Attempt to set default value to wrong type for resource '%s'.", path);
     }
     else if (!resTree_HasDefault(resRef))
     {
@@ -805,11 +805,11 @@ void io_SetNumericDefault
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to set default value of non-existent resource '%s'.", path);
+        LE_CRIT("Attempt to set default value of non-existent resource '%s'.", path);
     }
     else if (resTree_GetDataType(resRef) != IO_DATA_TYPE_NUMERIC)
     {
-        LE_KILL_CLIENT("Attempt to set default value to wrong type for resource '%s'.", path);
+        LE_CRIT("Attempt to set default value to wrong type for resource '%s'.", path);
     }
     else if (!resTree_HasDefault(resRef))
     {
@@ -840,11 +840,11 @@ void io_SetStringDefault
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to set default value of non-existent resource '%s'.", path);
+        LE_CRIT("Attempt to set default value of non-existent resource '%s'.", path);
     }
     else if (resTree_GetDataType(resRef) != IO_DATA_TYPE_STRING)
     {
-        LE_KILL_CLIENT("Attempt to set default value to wrong type for resource '%s'.", path);
+        LE_CRIT("Attempt to set default value to wrong type for resource '%s'.", path);
     }
     else if (!resTree_HasDefault(resRef))
     {
@@ -875,11 +875,11 @@ void io_SetJsonDefault
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Attempt to set default value of non-existent resource '%s'.", path);
+        LE_CRIT("Attempt to set default value of non-existent resource '%s'.", path);
     }
     else if (resTree_GetDataType(resRef) != IO_DATA_TYPE_JSON)
     {
-        LE_KILL_CLIENT("Attempt to set default value to wrong type for resource '%s'.", path);
+        LE_CRIT("Attempt to set default value to wrong type for resource '%s'.", path);
     }
     else if (!resTree_HasDefault(resRef))
     {
@@ -892,9 +892,7 @@ void io_SetJsonDefault
         }
         else
         {
-            LE_KILL_CLIENT("Invalid JSON string as default value for resource '%s' (%s).",
-                           path,
-                           value);
+            LE_CRIT("Invalid JSON string as default value for resource '%s' (%s).", path, value);
         }
     }
 }
@@ -918,7 +916,7 @@ static dataSample_Ref_t GetCurrentValue
 {
     if (resTree_GetDataType(resRef) != dataType)
     {
-        LE_KILL_CLIENT("Fetch of wrong data type on resource.");
+        LE_CRIT("Fetch of wrong data type on resource.");
         return NULL;
     }
 
