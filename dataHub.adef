@@ -48,9 +48,10 @@ extern:
     dhubToolAdmin   = dhub.adminTool.admin
     dhubToolIo      = dhub.adminTool.io
     dhubToolQuery   = dhub.adminTool.query
-#endif
+#endif /* end !DHUB_DISABLE_TOOLS */
 }
 
+#if ${LE_CONFIG_LINUX} = y
 bindings:
 {
 #if ${DHUB_DISABLE_TOOLS} = 1
@@ -58,7 +59,8 @@ bindings:
     dhub.adminTool.admin    -> hubd.dataHub.admin
     dhub.adminTool.io       -> hubd.dataHub.io
     dhub.adminTool.query    -> hubd.dataHub.query
-#endif
+#endif /* end !DHUB_DISABLE_TOOLS */
 
     hubd.dataHub.le_appInfo -> appInfo.le_appInfo
 }
+#endif /* end LE_CONFIG_LINUX */

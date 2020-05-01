@@ -46,3 +46,8 @@ cflags:
 {
     -I$CURDIR/../json
 }
+
+#if ${DHUB_POOLS_INC} = ""
+#else
+    #include "${DHUB_POOLS_INC}"
+#endif
