@@ -7,9 +7,10 @@
  * The Data Hub Query API provides its clients with the ability to query resources within the
  * Data Hub's resource tree.
  *
- * There are two types of query supported:
+ * There are three types of query supported:
  * - Fetching of values
  * - Statistical analysis of buffered data sets
+ * - Fetching of versioned snapshots of all or part of the resource tree.
  *
  *
  * @section c_dataHubQuery_Fetching Fetching Data
@@ -71,6 +72,15 @@
  * - query_RemoveStringPushHandler()
  * - query_RemoveJsonPushHandler()
  *
+ *
+ * @section c_dataHubQuery_Snapshots Resource Tree Snapshots
+ *
+ * The snapshot API provides a mechanism to get the state of the resource tree at a given point in
+ * time.  The entire resource tree may be requested, or only a particular branch, and all values may
+ * be requested or only those that have changed since a certain point in time.  The API consists of
+ * two functions:
+ * - query_TakeSnapshot()
+ * - query_TrackDeletions()
  *
  * Copyright (C) Sierra Wireless Inc.
  *
@@ -610,4 +620,97 @@ EVENT JsonPush
 (
     string path[io.MAX_RESOURCE_PATH_LEN] IN,///< Absolute path of resource.
     JsonPushHandler callback
+);
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Supported snapshot encoding formats.
+ */
+//--------------------------------------------------------------------------------------------------
+ENUM SnapshotFormat
+{
+    SNAPSHOT_FORMAT_JSON,   ///< Basic JSON representation of the resource tree.
+    SNAPSHOT_FORMAT_OCTAVE, ///< Format for the payload of an Octave "tree" or "tree-diff" message.
+    SNAPSHOT_FORMAT_CUSTOM  ///< First available custom format type value.
+};
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Snapshot control flags.
+ */
+//--------------------------------------------------------------------------------------------------
+BITMASK SnapshotFlag
+{
+    SNAPSHOT_FLAG_FLUSH_DELETIONS,  ///< After taking this snapshot, flush accumulated deletion
+                                    ///< records.
+    SNAPSHOT_FLAG_CUSTOM            ///< First available custom control flag.
+};
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Callback to be invoked when the encoded stream is complete or if an error occurs.
+ */
+//--------------------------------------------------------------------------------------------------
+HANDLER HandleSnapshotResult
+(
+    le_result_t status IN ///< LE_OK when content is complete. Any other value indicates an error.
+);
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Beginning of time.  Used to indicate a request for all tree content since the tree was created.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE BEGINNING_OF_TIME = 0;
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Capture a snapshot of the resource tree.
+ *
+ * The snapshot will be of the portion of the tree rooted at the given pathe, and include all values
+ * which have changed since the provided time stamp.  The response will be encoded according to the
+ * specified formatter and streamed back to the requester via the provided file handle.  The end of
+ * data or an error will be indicated by invoking the provided callback with a result code.
+ *
+ * If deletions are being tracked (@see TrackDeletions), then information about deleted resources
+ * will be included in the snapshot if the formatter includes it.  The SNAPSHOT_FLAG_FLUSH_DELETIONS
+ * flag may be passed to flush and reset the current deletion tracking as part of the snapshot
+ * operation.  Doing this would mean that deletion information would only be available back to the
+ * timestamp of the last snapshot.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION TakeSnapshot
+(
+    uint32                  format                          IN, ///< Snapshot output data format.
+    SnapshotFlag            flags                           IN, ///< Flags controlling the
+                                                                ///< snapshot action.
+    string                  path[io.MAX_RESOURCE_PATH_LEN]  IN, ///< Tree path to use as the root.
+    double                  since                           IN, ///< Request only values that have
+                                                                ///< changed since this time (in s).
+                                                                ///< Use BEGINNING_OF_TIME to
+                                                                ///< request the full tree.
+    HandleSnapshotResult    callback                        IN, ///< Completion callback to indicate
+                                                                ///< the end of the streamed
+                                                                ///< snapshot, or an error.
+    file                    snapshotStream                  OUT ///< File descriptor to which the
+                                                                ///< encoded snapshot data will be
+                                                                ///< streamed.
+);
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Control whether deletion records should be maintained within the Data Hub.
+ *
+ * Turning on deletion tracking will cause a small amount of metadata to be retained for each
+ * deleted resource.  This metadata will be supplied to the formatter when a snapshot is requested
+ * so that nodes which have disappeared from the tree can be recorded appropriately.  Because this
+ * metadata will gradually accumulate over time as nodes are removed, there are two ways of
+ * requesting that the deletion data be flushed.  The first is to just disable and then reenable
+ * tracking using this function.  The second is to pass the SNAPSHOT_FLAG_FLUSH_DELETIONS flag when
+ * requesting a snapshot.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION TrackDeletions
+(
+    bool on IN ///< If true, start tracking deletions; if false stop tracking and flush records.
 );

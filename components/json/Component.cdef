@@ -1,7 +1,6 @@
 //--------------------------------------------------------------------------------------------------
 /**
- * Periodic sensor component. Simplifies the implementation of a periodic sensor that is connected
- * to and controlled by the Data Hub.
+ * JSON String Parser API.
  *
  * Copyright (C) Sierra Wireless Inc.
  */

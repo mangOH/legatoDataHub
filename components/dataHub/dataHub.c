@@ -31,6 +31,7 @@
 #include "obs.h"
 #include "ioService.h"
 #include "adminService.h"
+#include "snapshot.h"
 
 
 //--------------------------------------------------------------------------------------------------
@@ -48,6 +49,7 @@ COMPONENT_INIT
     resTree_Init();
     ioService_Init();
     adminService_Init();
+    snapshot_Init();
 
     LE_INFO("Data Hub started.");
 }

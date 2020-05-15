@@ -137,7 +137,7 @@ void res_Construct
     resPtr->overrideType = IO_DATA_TYPE_TRIGGER;
     resPtr->defaultValue = NULL;
     resPtr->defaultType = IO_DATA_TYPE_TRIGGER;
-    resPtr->isConfigChanging = false;
+    resPtr->flags = 0;
     resPtr->pushHandlerList = LE_DLS_LIST_INIT;
     resPtr->jsonExample = NULL;
 }
@@ -433,8 +433,8 @@ le_result_t res_SetSource
         // should be suspended until the update finishes.
         if (IsUpdateInProgress)
         {
-            srcPtr->isConfigChanging = true;
-            destPtr->isConfigChanging = true;
+            srcPtr->flags |= RES_FLAG_CHANGING_CONFIG;
+            destPtr->flags |= RES_FLAG_CHANGING_CONFIG;
         }
     }
     // If the source is being set to a NULL source (removing the source) and the resource is
@@ -609,7 +609,7 @@ void res_Push
 
     // If the resource is undergoing a change to its routing or filtering configuration,
     // then acceptance of new samples is suspended until the configuration change is done.
-    if (resPtr->isConfigChanging)
+    if (resPtr->flags & RES_FLAG_CHANGING_CONFIG)
     {
         LE_WARN("Rejecting pushed value because configuration update is in progress.");
         le_mem_Release(dataSample);
@@ -821,8 +821,8 @@ void res_MoveAdminSettings
     destPtr->defaultValue = srcPtr->defaultValue;
     srcPtr->defaultValue = NULL;
 
-    // Move the isConfigChanging flag.
-    destPtr->isConfigChanging = srcPtr->isConfigChanging;
+    // Move the flags.
+    destPtr->flags = srcPtr->flags;
 
     // Move the push handler list.
     handler_MoveAll(&destPtr->pushHandlerList, &srcPtr->pushHandlerList);
@@ -924,7 +924,7 @@ void res_SetMinPeriod
 
     if (IsUpdateInProgress)
     {
-        resPtr->isConfigChanging = true;
+        resPtr->flags |= RES_FLAG_CHANGING_CONFIG;
     }
 }
 
@@ -964,7 +964,7 @@ void res_SetHighLimit
 
     if (IsUpdateInProgress)
     {
-        resPtr->isConfigChanging = true;
+        resPtr->flags |= RES_FLAG_CHANGING_CONFIG;
     }
 }
 
@@ -1004,7 +1004,7 @@ void res_SetLowLimit
 
     if (IsUpdateInProgress)
     {
-        resPtr->isConfigChanging = true;
+        resPtr->flags |= RES_FLAG_CHANGING_CONFIG;
     }
 }
 
@@ -1047,7 +1047,7 @@ void res_SetChangeBy
 
     if (IsUpdateInProgress)
     {
-        resPtr->isConfigChanging = true;
+        resPtr->flags |= RES_FLAG_CHANGING_CONFIG;
     }
 }
 
@@ -1091,7 +1091,7 @@ void res_SetTransform
 
     if (IsUpdateInProgress)
     {
-        resPtr->isConfigChanging = true;
+        resPtr->flags |= RES_FLAG_CHANGING_CONFIG;
     }
 }
 
@@ -1489,6 +1489,41 @@ void res_RemoveOverride
     }
 }
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the resource's relevance flag.
+ */
+//--------------------------------------------------------------------------------------------------
+void res_SetRelevance
+(
+    res_Resource_t  *resPtr,    ///< Resource to query.
+    bool             relevant   ///< Relevance of resource to current operation.
+)
+{
+    if (relevant)
+    {
+        resPtr->flags |= RES_FLAG_RELEVANT;
+    }
+    else
+    {
+        resPtr->flags &= ~RES_FLAG_RELEVANT;
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the resource's relevance flag.
+ *
+ * @return Relevance of resource to the current operation.
+ */
+//--------------------------------------------------------------------------------------------------
+bool res_IsRelevant
+(
+    res_Resource_t *resPtr ///< Resource to query.
+)
+{
+    return (resPtr->flags & RES_FLAG_RELEVANT);
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -1512,7 +1547,7 @@ void res_StartUpdate
 
 //--------------------------------------------------------------------------------------------------
 /**
- * Clear the isConfigChanging flag on a given resource.
+ * Clear the config changing flag on a given resource.
  */
 //--------------------------------------------------------------------------------------------------
 static void ClearConfigChangingFlag
@@ -1523,7 +1558,7 @@ static void ClearConfigChangingFlag
 //--------------------------------------------------------------------------------------------------
 {
     LE_UNUSED(entryType);
-    resPtr->isConfigChanging = false;
+    resPtr->flags &= ~RES_FLAG_CHANGING_CONFIG;
 }
 
 

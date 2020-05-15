@@ -56,7 +56,7 @@ void resTree_Init
  * @return Reference to the object.
  */
 //--------------------------------------------------------------------------------------------------
-resTree_EntryRef_t resTree_GetRoot
+LE_SHARED resTree_EntryRef_t resTree_GetRoot
 (
     void
 );
@@ -123,7 +123,7 @@ resTree_EntryRef_t resTree_FindEntryAtAbsolutePath
  * @return Ptr to the name. Only valid while the entry exists.
  */
 //--------------------------------------------------------------------------------------------------
-const char* resTree_GetEntryName
+LE_SHARED const char *resTree_GetEntryName
 (
     resTree_EntryRef_t entryRef
 );
@@ -136,7 +136,7 @@ const char* resTree_GetEntryName
  * @return The entry type.
  */
 //--------------------------------------------------------------------------------------------------
-admin_EntryType_t resTree_GetEntryType
+LE_SHARED admin_EntryType_t resTree_GetEntryType
 (
     resTree_EntryRef_t entryRef
 );
@@ -165,7 +165,7 @@ const char* resTree_GetUnits
  * @return the data type.
  */
 //--------------------------------------------------------------------------------------------------
-io_DataType_t resTree_GetDataType
+LE_SHARED io_DataType_t resTree_GetDataType
 (
     resTree_EntryRef_t resRef
 );
@@ -285,7 +285,7 @@ resTree_EntryRef_t resTree_GetObservation
  *  - LE_NOT_FOUND if the resource is not in the given namespace.
  */
 //--------------------------------------------------------------------------------------------------
-ssize_t resTree_GetPath
+LE_SHARED ssize_t resTree_GetPath
 (
     char* stringBuffPtr,  ///< Ptr to where the path should be written.
     size_t stringBuffSize,  ///< Size of the string buffer, in bytes.
@@ -363,7 +363,7 @@ hub_HandlerRef_t resTree_AddPushHandler
  * @return Reference to the Data Sample object or NULL if the resource doesn't have a current value.
  */
 //--------------------------------------------------------------------------------------------------
-dataSample_Ref_t resTree_GetCurrentValue
+LE_SHARED dataSample_Ref_t resTree_GetCurrentValue
 (
     resTree_EntryRef_t resRef
 );
@@ -648,7 +648,7 @@ void resTree_MarkOptional
  * @return true if a mandatory output, false if it's an optional output or not an output at all.
  */
 //--------------------------------------------------------------------------------------------------
-bool resTree_IsMandatory
+LE_SHARED bool resTree_IsMandatory
 (
     resTree_EntryRef_t resEntry
 );
@@ -785,6 +785,40 @@ void resTree_RemoveOverride
     resTree_EntryRef_t resEntry
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the last modified time stamp of a resource.
+ *
+ * @return Time stamp value, in seconds since the Epoch.
+ */
+//--------------------------------------------------------------------------------------------------
+double resTree_GetLastModified
+(
+    resTree_EntryRef_t resEntry ///< Resource to query.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the node's relevance flag.
+ */
+//--------------------------------------------------------------------------------------------------
+void resTree_SetRelevance
+(
+    resTree_EntryRef_t  resEntry,   ///< Resource to query.
+    bool                relevant    ///< Relevance of node to current operation.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the node's relevance flag.
+ *
+ * @return Relevance of node to the current operation.
+ */
+//--------------------------------------------------------------------------------------------------
+bool resTree_IsRelevant
+(
+    resTree_EntryRef_t resEntry ///< Resource to query.
+);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -983,6 +1017,5 @@ double resTree_QueryStdDev
     resTree_EntryRef_t obsEntry,    ///< Observation entry.
     double startTime    ///< If < 30 years then seconds before now; else seconds since the Epoch.
 );
-
 
 #endif // NAMESPACE_H_INCLUDE_GUARD

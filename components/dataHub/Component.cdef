@@ -30,16 +30,17 @@ requires:
 
 sources:
 {
+    adminService.c
     dataHub.c
     dataSample.c
-    resTree.c
+    handler.c
+    ioPoint.c
     ioService.c
-    adminService.c
+    obs.c
     queryService.c
     resource.c
-    ioPoint.c
-    obs.c
-    handler.c
+    resTree.c
+    snapshot.c
 }
 
 cflags:
