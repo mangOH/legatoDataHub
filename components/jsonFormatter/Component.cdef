@@ -1,0 +1,28 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * Snapshot formatter producing JSON output.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+requires:
+{
+    api:
+    {
+        admin.api   [types-only]
+        io.api      [types-only]
+        query.api   [types-only]
+    }
+}
+
+cflags:
+{
+    -std=c99
+    -I$CURDIR/../dataHub
+}
+
+sources:
+{
+    jsonFormatter.c
+}

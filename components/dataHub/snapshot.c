@@ -10,6 +10,7 @@
 #include "interfaces.h"
 
 #include "dataHub.h"
+#include "jsonFormatter.h"
 
 /// FIFO path for formatted data streaming.
 #define SNAPSHOT_FIFO   "/tmp/datahub_snapshot_fifo"
@@ -575,10 +576,9 @@ void query_TakeSnapshot
     //       fixed list.
     switch (format)
     {
-        // TODO: implement formatters
-        // case QUERY_SNAPSHOT_FORMAT_JSON:
-        //     status = GetJsonSnapshotFormatter(flags, Snapshot.sink, &Snapshot.formatter);
-        //     break;
+        case QUERY_SNAPSHOT_FORMAT_JSON:
+            status = GetJsonSnapshotFormatter(flags, Snapshot.sink, &Snapshot.formatter);
+            break;
         // case QUERY_SNAPSHOT_FORMAT_OCTAVE:
         //     status = GetOctaveSnapshotFormatter(flags, Snapshot.sink, &Snapshot.formatter);
         //     break;
