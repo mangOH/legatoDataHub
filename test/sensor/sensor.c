@@ -27,6 +27,8 @@ static void SampleTemp
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(context);
+
     // The "temperature" is a sine wave function between -20 and +40 C over time.
     le_clk_Time_t now = le_clk_GetAbsoluteTime();
 
@@ -52,6 +54,8 @@ static void TimerExpired
 //--------------------------------------------------------------------------------------------------
 {
     static double counter = 0;
+
+    LE_UNUSED(timer);
 
     counter++;
 
@@ -96,6 +100,8 @@ static void PeriodUpdateHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(contextPtr);
+
     LE_INFO("Received update to 'period' setting: %lf (timestamped %lf)", value, timestamp);
 
     uint32_t ms = (uint32_t)(value * 1000);
@@ -131,6 +137,8 @@ static void EnableUpdateHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(contextPtr);
+
     LE_INFO("Received update to 'enable' setting: %s (timestamped %lf)",
             value == false ? "false" : "true",
             timestamp);
@@ -164,6 +172,7 @@ static void UpdateStartEndHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(contextPtr);
     LE_INFO("Configuration update %s.", isStarting ? "starting" : "finished");
 }
 

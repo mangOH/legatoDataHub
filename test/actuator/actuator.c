@@ -28,6 +28,8 @@ static void TreeChangeHandler
     void* contextPtr
 )
 {
+    LE_UNUSED(contextPtr);
+
     LE_INFO("tree change = %s %d %d", path, entryType, operationType);
 
     if (strncmp(path, "/app/actuator/dummy/input", 25) == 0)
@@ -100,6 +102,7 @@ static void JsonCounterUpdateHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(contextPtr);
     LE_INFO("counter = %s (timestamped %lf)", value, timestamp);
 }
 
@@ -117,6 +120,8 @@ static void NumericCounterUpdateHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(contextPtr);
+
     LE_INFO("counter = %lf (timestamped %lf)", value, timestamp);
 
     // Every 5th push, do some additional testing.
@@ -154,6 +159,8 @@ void AssertTimer
     le_timer_Ref_t timerRef
 )
 {
+    LE_UNUSED(timerRef);
+
     // Check that the ResourceTreeChangeHandler has been called with the
     // correct values, the correct number of times
     LE_ASSERT(dummyInputCreated == 1);
