@@ -2,3 +2,4 @@ _build_*
 *.update
 docs
 backup
+.gdb_history

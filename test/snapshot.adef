@@ -1,0 +1,24 @@
+//--------------------------------------------------------------------------------------------------
+/**
+ * Data Hub snapshot API testing tool.  Provides a command-line interface to the snapshot API.
+ *
+ * Copyright (C) Sierra Wireless Inc.
+ */
+//--------------------------------------------------------------------------------------------------
+
+executables:
+{
+    dsnap = ( snapshot )
+}
+
+#if ${LE_CONFIG_LINUX} = y
+bindings:
+{
+    dsnap.snapshot.query -> dataHub.query
+}
+#else /* !LE_CONFIG_LINUX */
+extern:
+{
+    dsnap.snapshot.query
+}
+#endif /* end !LE_CONFIG_LINUX */

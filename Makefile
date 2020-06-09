@@ -1,20 +1,28 @@
 
 TARGET ?= localhost
 
-.PHONY: all dataHub appInfoStub sensor actuator
-all: dataHub appInfoStub sensor actuator
+DBG :=
+ifeq ($(D),1)
+    DBG := -d $(LEGATO_ROOT)/build/$(TARGET)/debug
+endif
+
+.PHONY: all dataHub appInfoStub sensor actuator snapshot
+all: dataHub appInfoStub sensor actuator snapshot
 
 dataHub:
-	mkapp -t $(TARGET) dataHub.adef -i $(LEGATO_ROOT)/interfaces/supervisor
+	mkapp -t $(TARGET) dataHub.adef -i $(LEGATO_ROOT)/interfaces/supervisor $(DBG)
 
 appInfoStub:
-	mkapp -t $(TARGET) test/appInfoStub.adef -i $(LEGATO_ROOT)/interfaces/supervisor -i $(CURDIR)
+	mkapp -t $(TARGET) test/appInfoStub.adef -i $(LEGATO_ROOT)/interfaces/supervisor -i $(CURDIR) $(DBG)
 
 sensor:
-	mkapp -t $(TARGET) test/sensor.adef -i $(PWD) -s components -i components/periodicSensor
+	mkapp -t $(TARGET) test/sensor.adef -i $(PWD) -s components -i components/periodicSensor $(DBG)
 
 actuator:
-	mkapp -t $(TARGET) test/actuator.adef -i $(PWD)
+	mkapp -t $(TARGET) test/actuator.adef -i $(PWD) $(DBG)
+
+snapshot:
+	mkapp -t $(TARGET) test/snapshot.adef -i $(PWD) $(DBG)
 
 .PHONY: clean
 clean:
@@ -33,6 +41,7 @@ start: stop all
 	sdir bind "<$(USER)>.dhubToolAdmin" "<$(USER)>.admin"
 	sdir bind "<$(USER)>.dhubToolIo" "<$(USER)>.io"
 	sdir bind "<$(USER)>.dhubToolQuery" "<$(USER)>.query"
+	sdir bind "<$(USER)>.dsnap.snapshot.query" "<$(USER)>.query"
 	test/supervisor
 	$(DHUB) set backupPeriod temp 5
 	$(DHUB) set bufferSize temp 100
