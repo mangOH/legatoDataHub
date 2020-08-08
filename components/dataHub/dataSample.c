@@ -44,8 +44,11 @@ DataSample_t;
 /// Size of small strings in samples.
 #define STRING_SMALL_BYTES  50
 
-/// Default sample pool size.  This may be overridden in the .cdef.
-#define DEFAULT_SAMPLE_POOL_SIZE 1000
+/// Default non string sample pool size.  This may be overridden in the .cdef.
+#define DEFAULT_NON_STRING_SAMPLE_POOL_SIZE 1000
+
+/// Default string based sample pool size. This may be overridden in the .cdef.
+#define DEFAULT_STRING_BASED_SAMPLE_POOL_SIZE 1000
 
 /// Default number of large string pool entries.  This may be overridden in the .cdef.
 #define DEFAULT_LARGE_STRING_POOL_SIZE 5
@@ -59,14 +62,35 @@ DataSample_t;
 #define SMALL_STRING_POOL_SIZE \
     (((MED_STRING_POOL_SIZE / 2) * STRING_MED_BYTES) / STRING_SMALL_BYTES)
 
-/// Pool of Data Sample objects.
-static le_mem_PoolRef_t DataSamplePool = NULL;
-LE_MEM_DEFINE_STATIC_POOL(DataSamplePool, DEFAULT_SAMPLE_POOL_SIZE, sizeof(DataSample_t));
+/// Pool of simple Data Sample objects(trigger, boolean, numeric)
+static le_mem_PoolRef_t NonStringDataSamplePool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(NonStringDataSamplePool, DEFAULT_NON_STRING_SAMPLE_POOL_SIZE,
+                          sizeof(DataSample_t));
+
+/// Pool of String based Data Sample objects(string and json).
+static le_mem_PoolRef_t StringBasedDataSamplePool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(StringBasedDataSamplePool, DEFAULT_STRING_BASED_SAMPLE_POOL_SIZE,
+                          sizeof(DataSample_t));
 
 /// Pool for holding strings.
 static le_mem_PoolRef_t StringPool = NULL;
 LE_MEM_DEFINE_STATIC_POOL(StringPool, DEFAULT_LARGE_STRING_POOL_SIZE, STRING_LARGE_BYTES);
 
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Sample destructor
+ * Used to release any strings that are allocated as part of sample creation.
+ */
+//--------------------------------------------------------------------------------------------------
+static void StringSampleDestructor
+(
+    void* objPtr
+)
+{
+    dataSample_Ref_t samplePtr = objPtr;
+    le_mem_Release((char*) dataSample_GetString(samplePtr));
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -81,8 +105,13 @@ void dataSample_Init
 {
     le_mem_PoolRef_t layeredStringPool;
 
-    DataSamplePool = le_mem_InitStaticPool(DataSamplePool, DEFAULT_SAMPLE_POOL_SIZE,
-                        sizeof(DataSample_t));
+    NonStringDataSamplePool = le_mem_InitStaticPool(NonStringDataSamplePool,
+                                DEFAULT_NON_STRING_SAMPLE_POOL_SIZE, sizeof(DataSample_t));
+
+    StringBasedDataSamplePool = le_mem_InitStaticPool(StringBasedDataSamplePool,
+                                  DEFAULT_STRING_BASED_SAMPLE_POOL_SIZE, sizeof(DataSample_t));
+
+    le_mem_SetDestructor(StringBasedDataSamplePool, StringSampleDestructor);
 
     layeredStringPool = le_mem_InitStaticPool(StringPool, DEFAULT_LARGE_STRING_POOL_SIZE,
                             STRING_LARGE_BYTES);
@@ -138,7 +167,7 @@ dataSample_Ref_t dataSample_CreateTrigger
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(NonStringDataSamplePool, timestamp);
 
     return samplePtr;
 }
@@ -160,7 +189,7 @@ dataSample_Ref_t dataSample_CreateBoolean
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(NonStringDataSamplePool, timestamp);
     samplePtr->value.boolean = value;
 
     return samplePtr;
@@ -183,7 +212,7 @@ dataSample_Ref_t dataSample_CreateNumeric
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t* samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t* samplePtr = CreateSample(NonStringDataSamplePool, timestamp);
     samplePtr->value.numeric = value;
 
     return samplePtr;
@@ -208,7 +237,7 @@ dataSample_Ref_t dataSample_CreateString
 )
 //--------------------------------------------------------------------------------------------------
 {
-    DataSample_t *samplePtr = CreateSample(DataSamplePool, timestamp);
+    DataSample_t *samplePtr = CreateSample(StringBasedDataSamplePool, timestamp);
 
     samplePtr->value.stringPtr = le_mem_StrDup(StringPool, value);
     LE_FATAL_IF(samplePtr->value.stringPtr == NULL,
@@ -543,12 +572,18 @@ dataSample_Ref_t dataSample_Copy
 )
 //--------------------------------------------------------------------------------------------------
 {
-    dataSample_Ref_t duplicate = le_mem_Alloc(DataSamplePool);
+    dataSample_Ref_t duplicate;
 
-    *duplicate = *original;
     if ((dataType == IO_DATA_TYPE_STRING) || (dataType == IO_DATA_TYPE_JSON))
     {
+        duplicate = le_mem_Alloc(StringBasedDataSamplePool);
+        *duplicate = *original;
         duplicate->value.stringPtr = le_mem_StrDup(StringPool, original->value.stringPtr);
+    }
+    else
+    {
+        duplicate = le_mem_Alloc(NonStringDataSamplePool);
+        *duplicate = *original;
     }
 
     return duplicate;
