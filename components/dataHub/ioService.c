@@ -91,6 +91,7 @@ static resTree_EntryRef_t FindResource
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_FAULT if creation of the input resource failed.
  */
 //--------------------------------------------------------------------------------------------------
 le_result_t io_CreateInput
@@ -154,7 +155,7 @@ le_result_t io_CreateInput
     if (resRef == NULL)
     {
         LE_ERROR("Failed to create Input '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
-        return LE_FAULT;    // Client has been killed, so it doesn't matter what we return.
+        return LE_FAULT;
     }
 
     return LE_OK;
@@ -212,6 +213,7 @@ void io_SetJsonExample
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_FAULT if creation of the output resource failed.
  */
 //--------------------------------------------------------------------------------------------------
 le_result_t io_CreateOutput
@@ -275,7 +277,7 @@ le_result_t io_CreateOutput
     if (resRef == NULL)
     {
         LE_ERROR("Failed to create Output '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
-        return LE_FAULT;    // Client has been killed, so it doesn't matter what we return.
+        return LE_FAULT;
     }
 
     return LE_OK;
@@ -480,7 +482,7 @@ void io_PushJson
  * Add a handler function to be called when a value is pushed to (and accepted by) an Input
  * or Output in the client app's namespace.
  *
- * @return A reference to the handler or NULL if failed and client has been killed.
+ * @return A reference to the handler or NULL if failed.
  */
 //--------------------------------------------------------------------------------------------------
 static hub_HandlerRef_t AddPushHandler
