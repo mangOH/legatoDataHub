@@ -168,6 +168,24 @@ resTree_EntryRef_t hub_GetClientNamespace
         return NULL;
     }
 
+#if LE_CONFIG_TARGET_HL78MCU && WITH_OCTAVE
+    //
+    // JV: hack away rpcProxy and cmdTools app names until LE-15082
+    //
+
+    //LE_INFO("is it rpcProxy?: '%s'",appName);
+    if (strncmp(appName, "rpcProxy", LE_LIMIT_APP_NAME_LEN) == 0)
+    {
+        strncpy(appName, "cloudInterface", LE_LIMIT_APP_NAME_LEN);
+        LE_DEBUG("changed rpcProxy to '%s'",appName);
+    }
+    else if (strncmp(appName, "cmdTools", LE_LIMIT_APP_NAME_LEN) == 0)
+    {
+        strncpy(appName, "orp", LE_LIMIT_APP_NAME_LEN);
+        LE_DEBUG("changed cmdTools to '%s'",appName);
+    }
+#endif /* end LE_CONFIG_TARGET_HL78MCU && WITH_OCTAVE */
+
     // Get the "/app" namespace first.
     nsRef = resTree_GetEntry(resTree_GetRoot(), "app");
 
