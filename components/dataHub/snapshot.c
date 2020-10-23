@@ -12,6 +12,9 @@
 #include "dataHub.h"
 #include "jsonFormatter.h"
 
+/// Upper limit on the number of passes through the tree that can be requested by a formatter.
+#define MAX_PASSES      10
+
 /// FIFO path for formatted data streaming.
 #define SNAPSHOT_FIFO   "/tmp/datahub_snapshot_fifo"
 
@@ -39,6 +42,7 @@ typedef struct
     double                   since;     ///< Only include updates newer than this time stamp.
     snapshot_Formatter_t    *formatter; ///< Formatter to use to write snapshot data.
     double                   timestamp; ///< When the snapshot operation was started.
+    unsigned int             passes;    ///< Number of passes conducted through the resource tree.
 
     query_HandleSnapshotResultFunc_t     callback;  ///< Callback to invoke to indicate end of
                                                     ///< snapshot, or error.
@@ -46,6 +50,7 @@ typedef struct
 
     SnapshotState_t          nextState; ///< Next snapshot processing state to transition to.
     resTree_EntryRef_t       nodeRef;   ///< Active resource tree node.
+    resTree_EntryRef_t       rootRef;   ///< Root of the relevant portion of the tree.
 } Snapshot_t;
 
 /// Node parent stack entry.
@@ -205,16 +210,21 @@ static void NodeBegin
     void *unused2   ///< [IN] Unused parameter.
 )
 {
-    resTree_EntryRef_t childRef;
+    resTree_EntryRef_t childRef = NULL;
 
     LE_UNUSED(unused1);
     LE_UNUSED(unused2);
 
     LE_DEBUG("Handling node beginning");
 
-    if (Snapshot.since == QUERY_BEGINNING_OF_TIME || resTree_IsRelevant(Snapshot.nodeRef))
+    if (resTree_IsRelevant(Snapshot.nodeRef))
     {
-        childRef = resTree_GetFirstChild(Snapshot.nodeRef);
+        if (!resTree_IsDeleted(Snapshot.nodeRef))
+        {
+            childRef = resTree_GetFirstChildEx(
+                            Snapshot.nodeRef,
+                            Snapshot.formatter->filter & SNAPSHOT_FILTER_DELETED);
+        }
         Snapshot.nextState = (childRef == NULL ? STATE_NODE_END : STATE_NODE_CHILDREN);
         Snapshot.formatter->beginNode(Snapshot.formatter);
     }
@@ -242,7 +252,9 @@ static void NodeChildren
     LE_DEBUG("Handling node children");
 
     PushParent(Snapshot.nodeRef);
-    Snapshot.nodeRef = resTree_GetFirstChild(Snapshot.nodeRef);
+    Snapshot.nodeRef = resTree_GetFirstChildEx(
+                            Snapshot.nodeRef,
+                            Snapshot.formatter->filter & SNAPSHOT_FILTER_DELETED);
 
     // We should only get here if we already checked for children.
     LE_ASSERT(Snapshot.nodeRef != NULL);
@@ -269,9 +281,10 @@ static void NodeEnd
     LE_DEBUG("Handling node end");
 
     Snapshot.nextState = STATE_NODE_SIBLING;
-    if (Snapshot.since == QUERY_BEGINNING_OF_TIME || resTree_IsRelevant(Snapshot.nodeRef))
+    if (resTree_IsRelevant(Snapshot.nodeRef))
     {
         Snapshot.formatter->endNode(Snapshot.formatter);
+        resTree_ClearNewness(Snapshot.nodeRef);
     }
     else
     {
@@ -297,7 +310,15 @@ static void NodeSibling
 
     LE_DEBUG("Handling node sibling");
 
-    Snapshot.nodeRef = resTree_GetNextSibling(nodeRef);
+    Snapshot.nodeRef = resTree_GetNextSiblingEx(
+                            nodeRef,
+                            Snapshot.formatter->filter & SNAPSHOT_FILTER_DELETED);
+    if ((Snapshot.flags & QUERY_SNAPSHOT_FLAG_FLUSH_DELETIONS) && resTree_IsDeleted(nodeRef))
+    {
+        // If we are flushing as we go, remove the deleted node.
+        le_mem_Release(nodeRef);
+    }
+
     if (Snapshot.nodeRef == NULL)
     {
         // No more siblings, try looking for a parent.
@@ -327,6 +348,79 @@ static void NodeSibling
 
 //--------------------------------------------------------------------------------------------------
 /*
+ * Recursively set the relevance flag for the specified node and its children.
+ */
+//--------------------------------------------------------------------------------------------------
+static void UpdateRelevance
+(
+    resTree_EntryRef_t nodeRef, ///< Node reference.
+    uint32_t           filter   ///< Filter bitmask for node relevence beyond just timestamp.
+)
+{
+    bool                relevant = false;
+    bool                timely = false;
+    resTree_EntryRef_t  childRef = resTree_GetFirstChildEx(nodeRef, true);
+
+    if (nodeRef == Snapshot.rootRef)
+    {
+        // Always include the root node.
+        relevant = true;
+    }
+    else if ((filter & SNAPSHOT_FILTER_CREATED) && resTree_IsNew(nodeRef))
+    {
+        relevant = true;
+    }
+    else if ((filter & SNAPSHOT_FILTER_DELETED) && resTree_IsDeleted(nodeRef))
+    {
+        relevant = true;
+    }
+    else if (filter & (SNAPSHOT_FILTER_CREATED | SNAPSHOT_FILTER_NORMAL))
+    {
+        timely = snapshot_IsTimely(nodeRef);
+        relevant = timely;
+    }
+    LE_DEBUG("Node %s is %srelevant on its own merit",
+        resTree_GetEntryName(nodeRef), (relevant ? "" : "ir"));
+
+    // Regardless of this node's timeliness, it is considered relevant if at least one child node is
+    // relevant, in order to provide a "here to there" path.
+    while (childRef != NULL)
+    {
+        UpdateRelevance(childRef, filter);
+        relevant = resTree_IsRelevant(childRef) || relevant;
+        childRef = resTree_GetNextSiblingEx(childRef, true);
+    }
+
+    LE_DEBUG("Node %s is cumulatively %srelevant",
+        resTree_GetEntryName(nodeRef), (relevant ? "" : "ir"));
+    resTree_SetRelevance(nodeRef, relevant);
+
+    // Timeliness implies relevance, but the reverse is not true.  Ensure that this condition is
+    // met.
+    LE_ASSERT(!(timely && !relevant));
+}
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Initiate a pass through the resource tree.
+ */
+//--------------------------------------------------------------------------------------------------
+static void StartPass
+(
+    void
+)
+{
+    LE_DEBUG("Starting pass %u", Snapshot.passes);
+
+    Snapshot.nextState = STATE_NODE_BEGIN;
+    Snapshot.nodeRef = Snapshot.rootRef;
+    UpdateRelevance(Snapshot.nodeRef, Snapshot.formatter->filter);
+    Snapshot.formatter->startTree(Snapshot.formatter);
+    ++Snapshot.passes;
+}
+
+//--------------------------------------------------------------------------------------------------
+/*
  * End the snapshot state machine.
  */
 //--------------------------------------------------------------------------------------------------
@@ -344,7 +438,19 @@ static void TreeEnd
     // Should never get here with a parent still on the stack.
     LE_ASSERT(PopParent() == NULL);
 
-    snapshot_End(LE_OK);
+    // A formatter may ask for another pass through the tree, or we may be done.
+    if (Snapshot.formatter->scan && Snapshot.passes < MAX_PASSES)
+    {
+        StartPass();
+    }
+    else if (Snapshot.passes >= MAX_PASSES)
+    {
+        snapshot_End(LE_OUT_OF_RANGE);
+    }
+    else
+    {
+        snapshot_End(LE_OK);
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -408,10 +514,23 @@ static void InvokeResultCallback
 //--------------------------------------------------------------------------------------------------
 static void FlushDeletionRecords
 (
-    void
+    resTree_EntryRef_t nodeRef ///< Node to flush beneath.
 )
 {
-    // TODO: something useful
+    resTree_EntryRef_t childRef;
+    resTree_EntryRef_t nextRef = resTree_GetFirstChildEx(nodeRef, true);
+
+    while (nextRef != NULL)
+    {
+        childRef = nextRef;
+        nextRef = resTree_GetNextSiblingEx(childRef, true);
+
+        FlushDeletionRecords(childRef);
+        if (resTree_IsDeleted(childRef))
+        {
+            le_mem_Release(childRef);
+        }
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -443,47 +562,11 @@ void snapshot_End
         le_fd_Close(Snapshot.source);
     }
 
-    if (status == LE_OK && (Snapshot.flags & QUERY_SNAPSHOT_FLAG_FLUSH_DELETIONS))
-    {
-        FlushDeletionRecords();
-    }
-
     // Resume resource tree updates.
     resTree_EndUpdate();
     IsRunning = false;
 
     le_event_QueueFunction(&InvokeResultCallback, (void *) (uintptr_t) status, NULL);
-}
-
-//--------------------------------------------------------------------------------------------------
-/*
- * Recursively set the relevance flag for the specified node and its children.
- */
-//--------------------------------------------------------------------------------------------------
-static void UpdateRelevance
-(
-    resTree_EntryRef_t nodeRef ///< Node reference.
-)
-{
-    bool                relevant;
-    bool                timely = snapshot_IsTimely(nodeRef);
-    resTree_EntryRef_t  childRef = resTree_GetFirstChild(nodeRef);
-
-    relevant = timely;
-
-    // Regardless of this node's timeliness, it is considered relevant if at least one child node is
-    // relevant, in order to provide a "here to there" path.
-    while (childRef != NULL)
-    {
-        UpdateRelevance(childRef);
-        relevant = resTree_IsRelevant(childRef) || relevant;
-        childRef = resTree_GetNextSibling(childRef);
-    }
-    resTree_SetRelevance(nodeRef, relevant);
-
-    // Timeliness implies relevance, but the reverse is not true.  Ensure that this condition is
-    // met.
-    LE_ASSERT(!(timely && !relevant));
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -591,8 +674,8 @@ void query_TakeSnapshot
         goto end;
     }
 
-    Snapshot.nodeRef = resTree_FindEntryAtAbsolutePath(path);
-    if (Snapshot.nodeRef == NULL)
+    Snapshot.rootRef = resTree_FindEntryAtAbsolutePath(path);
+    if (Snapshot.rootRef == NULL)
     {
         status = LE_NOT_FOUND;
         goto end;
@@ -600,18 +683,19 @@ void query_TakeSnapshot
 
     Snapshot.flags = flags;
     Snapshot.since = since;
-    Snapshot.nextState = STATE_NODE_BEGIN;
     *snapshotStream = Snapshot.source;
 
     currentTime = le_clk_GetAbsoluteTime();
     Snapshot.timestamp = (((double) currentTime.usec) / 1000000) + currentTime.sec;
 
-    if (Snapshot.since > QUERY_BEGINNING_OF_TIME)
+    if (Snapshot.formatter->scan)
     {
-        UpdateRelevance(Snapshot.nodeRef);
+        StartPass();
     }
-
-    Snapshot.formatter->startTree(Snapshot.formatter);
+    else
+    {
+        status = LE_UNSUPPORTED;
+    }
 
 end:
     if (status != LE_OK)
@@ -625,13 +709,13 @@ end:
 /*
  * Control whether deletion records should be maintained within the Data Hub.
  *
- * Turning on deletion tracking will cause a small amount of metadata to be retained for each
- * deleted resource.  This metadata will be supplied to the formatter when a snapshot is requested
- * so that nodes which have disappeared from the tree can be recorded appropriately.  Because this
- * metadata will gradually accumulate over time as nodes are removed, there are two ways of
- * requesting that the deletion data be flushed.  The first is to just disable and then reenable
- * tracking using this function.  The second is to pass the SNAPSHOT_FLAG_FLUSH_DELETIONS flag when
- * requesting a snapshot.
+ * Turning on deletion tracking will cause some metadata to be retained for each deleted resource.
+ * This metadata will be supplied to the formatter when a snapshot is requested so that nodes which
+ * have disappeared from the tree can be recorded appropriately.  Because this metadata will
+ * gradually accumulate over time as nodes are removed, there are two ways of requesting that the
+ * deletion data be flushed.  The first is to just disable and then reenable tracking using this
+ * function.  The second is to pass the SNAPSHOT_FLAG_FLUSH_DELETIONS flag when requesting a
+ * snapshot.
  */
 //--------------------------------------------------------------------------------------------------
 void query_TrackDeletions
@@ -642,7 +726,27 @@ void query_TrackDeletions
     AreDeletionsTracked = on;
     if (!AreDeletionsTracked)
     {
-        FlushDeletionRecords();
+        // Pause updates to the tree while we flush the records.
+        resTree_StartUpdate();
+        FlushDeletionRecords(resTree_GetRoot());
+        resTree_EndUpdate();
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/*
+ *  Record the deletion of a node so that it can be included with a snapshot.
+ */
+//--------------------------------------------------------------------------------------------------
+void snapshot_RecordNodeDeletion
+(
+    resTree_EntryRef_t nodeRef  ///< Deleted node.
+)
+{
+    if (AreDeletionsTracked)
+    {
+        le_mem_AddRef(nodeRef);
+        resTree_SetDeleted(nodeRef);
     }
 }
 
@@ -656,6 +760,8 @@ void snapshot_Init
     void
 )
 {
+    AreDeletionsTracked = false;
+
 #if LE_CONFIG_RTOS
     LE_ASSERT(le_fd_MkFifo(SNAPSHOT_FIFO, S_IRUSR | S_IWUSR) == 0);
 #endif

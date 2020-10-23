@@ -38,6 +38,7 @@ start: stop all
 	sdir bind "<$(USER)>.sensord.sensor.io" "<$(USER)>.io"
 	sdir bind "<$(USER)>.sensord.periodicSensor.dhubIO" "<$(USER)>.io"
 	sdir bind "<$(USER)>.actuatord.actuator.io" "<$(USER)>.io"
+	sdir bind "<$(USER)>.actuatord.actuator.admin" "<$(USER)>.admin"
 	sdir bind "<$(USER)>.dhubToolAdmin" "<$(USER)>.admin"
 	sdir bind "<$(USER)>.dhubToolIo" "<$(USER)>.io"
 	sdir bind "<$(USER)>.dhubToolQuery" "<$(USER)>.query"

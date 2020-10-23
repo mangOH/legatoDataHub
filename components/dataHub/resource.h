@@ -12,6 +12,9 @@
 
 #define RES_FLAG_CHANGING_CONFIG    0x80000000  ///< Administrative config update in progress.
 #define RES_FLAG_RELEVANT           0x40000000  ///< Resource is relevant to current operation.
+#define RES_FLAG_NEW                0x20000000  ///< Node has been created since the last snapshot.
+#define RES_FLAG_DELETED            0x10000000  ///< Node has been deleted since deletions were last
+                                                ///< flushed.
 
 // Forward declaration needed by res_Resource_t.entryRef.  See resTree.h
 typedef struct resTree_Entry* resTree_EntryRef_t;
@@ -724,6 +727,29 @@ void res_SetRelevance
  */
 //--------------------------------------------------------------------------------------------------
 bool res_IsRelevant
+(
+    res_Resource_t *resPtr ///< Resource to query.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a resource as no longer "new."  "New" resources are those that were created after the last
+ * snapshot scan of the tree.
+ */
+//--------------------------------------------------------------------------------------------------
+void res_ClearNewness
+(
+    res_Resource_t *resPtr ///< Resource to update.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the resource's "newness" flag.
+ *
+ * @return Whether the resource was created after the last scan.
+ */
+//--------------------------------------------------------------------------------------------------
+bool res_IsNew
 (
     res_Resource_t *resPtr ///< Resource to query.
 );

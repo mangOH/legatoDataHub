@@ -12,7 +12,7 @@
 #include "resource.h"
 #include "resTree.h"
 #include "adminService.h"
-
+#include "snapshot.h"
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -57,38 +57,48 @@ LE_MEM_DEFINE_STATIC_POOL(EntryPool, DEFAULT_RESOURCE_TREE_ENTRY_POOL_SIZE, size
 //--------------------------------------------------------------------------------------------------
 static Entry_t* AddChild
 (
-    Entry_t* parentPtr, ///< Ptr to the parent entry (NULL if creating the Root).
-    const char* name    ///< Name of the new child ("" if creating the Root).
+    Entry_t     *parentPtr, ///< Ptr to the parent entry (NULL if creating the Root).
+    const char  *name,      ///< Name of the new child ("" if creating the Root).
+    Entry_t     *entryPtr   ///< If non-NULL, resurrect an existing namespace node as the child,
+                            ///< rather than creating a new one.
 )
 //--------------------------------------------------------------------------------------------------
 {
-    Entry_t* entryPtr = le_mem_Alloc(EntryPool);
-
-    entryPtr->link = LE_DLS_LINK_INIT;
-
-    if (LE_OK != le_utf8_Copy(entryPtr->name, name, sizeof(entryPtr->name), NULL))
+    if (entryPtr == NULL)
     {
-        LE_ERROR("Resource tree entry name longer than %zu bytes max. Truncated to '%s'.",
-                 sizeof(entryPtr->name),
-                 name);
+        entryPtr = le_mem_Alloc(EntryPool);
+
+        if (LE_OK != le_utf8_Copy(entryPtr->name, name, sizeof(entryPtr->name), NULL))
+        {
+            LE_ERROR("Resource tree entry name longer than %zu bytes max. Truncated to '%s'.",
+                     sizeof(entryPtr->name),
+                     name);
+        }
+
+        entryPtr->link = LE_DLS_LINK_INIT;
+        entryPtr->childList = LE_DLS_LIST_INIT;
+        entryPtr->type = ADMIN_ENTRY_TYPE_NAMESPACE;
+
+        if (parentPtr != NULL)
+        {
+            LE_ASSERT(resTree_FindChildEx(parentPtr, name, true) == NULL);
+
+            // Increment the reference count on the parent.
+            le_mem_AddRef(parentPtr);
+
+            // Link to the parent entry.
+            entryPtr->parentPtr = parentPtr;
+            le_dls_Queue(&parentPtr->childList, &entryPtr->link);
+        }
+    }
+    else
+    {
+        LE_ASSERT(entryPtr->type == ADMIN_ENTRY_TYPE_NAMESPACE);
+        LE_ASSERT(entryPtr->parentPtr == parentPtr);
+        LE_ASSERT(le_dls_IsEmpty(&entryPtr->childList));
     }
 
-    entryPtr->childList = LE_DLS_LIST_INIT;
-    entryPtr->type = ADMIN_ENTRY_TYPE_NAMESPACE;
-    entryPtr->u.flags = 0;
-
-    if (parentPtr != NULL)
-    {
-        LE_ASSERT(resTree_FindChild(parentPtr, name) == NULL);
-
-        // Increment the reference count on the parent.
-        le_mem_AddRef(parentPtr);
-
-        // Link to the parent entry.
-        entryPtr->parentPtr = parentPtr;
-        le_dls_Queue(&parentPtr->childList, &entryPtr->link);
-    }
-
+    entryPtr->u.flags = RES_FLAG_NEW;
     return entryPtr;
 }
 
@@ -108,7 +118,6 @@ static void EntryDestructor
 
     LE_ASSERT(entryPtr->parentPtr != NULL);
     LE_ASSERT(le_dls_IsEmpty(&entryPtr->childList));
-    LE_ASSERT(entryPtr->u.flags == 0);
 
     // Remove from parent's list of children.
     le_dls_Remove(&entryPtr->parentPtr->childList, &entryPtr->link);
@@ -137,7 +146,7 @@ void resTree_Init
     le_mem_SetDestructor(EntryPool, EntryDestructor);
 
     // Create the Root Namespace.
-    RootPtr = AddChild(NULL, "");
+    RootPtr = AddChild(NULL, "", NULL);
 }
 
 
@@ -181,6 +190,41 @@ resTree_EntryRef_t resTree_GetRoot
     return RootPtr;
 }
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Find a child entry with a given name, optionally including already deleted nodes if they have not
+ * been flushed.
+ *
+ * @return Reference to the object or NULL if not found.
+ */
+//--------------------------------------------------------------------------------------------------
+resTree_EntryRef_t resTree_FindChildEx
+(
+    resTree_EntryRef_t   nsRef,         ///< Namespace entry to search.
+    const char          *name,          ///< Name of the child entry.
+    bool                 withZombies    ///< If the child has been deleted but is still around,
+                                        ///< return it.
+)
+{
+    le_dls_Link_t* linkPtr = le_dls_Peek(&nsRef->childList);
+
+    while (linkPtr != NULL)
+    {
+        Entry_t* childPtr = CONTAINER_OF(linkPtr, Entry_t, link);
+
+        if (withZombies || !resTree_IsDeleted(childPtr))
+        {
+            if (strncmp(name, childPtr->name, sizeof(childPtr->name)) == 0)
+            {
+                return childPtr;
+            }
+        }
+
+        linkPtr = le_dls_PeekNext(&nsRef->childList, linkPtr);
+    }
+
+    return NULL;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -196,21 +240,7 @@ resTree_EntryRef_t resTree_FindChild
 )
 //--------------------------------------------------------------------------------------------------
 {
-    le_dls_Link_t* linkPtr = le_dls_Peek(&nsRef->childList);
-
-    while (linkPtr != NULL)
-    {
-        Entry_t* childPtr = CONTAINER_OF(linkPtr, Entry_t, link);
-
-        if (strcmp(name, childPtr->name) == 0)
-        {
-            return childPtr;
-        }
-
-        linkPtr = le_dls_PeekNext(&nsRef->childList, linkPtr);
-    }
-
-    return NULL;
+    return resTree_FindChildEx(nsRef, name, false);
 }
 
 
@@ -279,15 +309,15 @@ static resTree_EntryRef_t GoToEntry
 
         // Look up the entry name in the list of children of the current entry.
         // If found, this becomes the new current entry.
-        Entry_t* childPtr = resTree_FindChild(currentEntry, entryName);
+        Entry_t* childPtr = resTree_FindChildEx(currentEntry, entryName, true);
 
-        if (childPtr == NULL)
+        if (childPtr == NULL || resTree_IsDeleted(childPtr))
         {
             // If we're supposed to create a missing entry, create one now.
             // Otherwise, return NULL.
             if (doCreate)
             {
-                childPtr = AddChild(currentEntry, entryName);
+                childPtr = AddChild(currentEntry, entryName, childPtr);
             }
             else
             {
@@ -838,6 +868,35 @@ ssize_t resTree_GetPath
     return bytesWritten;
 }
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the first child of a given entry, optionally including already deleted nodes if they have not
+ * been flushed.
+ *
+ * @return Reference to the first child entry, or NULL if the entry has no children.
+ */
+//--------------------------------------------------------------------------------------------------
+resTree_EntryRef_t resTree_GetFirstChildEx
+(
+    resTree_EntryRef_t  entryRef,   ///< Node to get the child of.
+    bool                withZombies ///< If the child has been deleted but is still around, return
+                                    ///< it.
+)
+{
+    le_dls_Link_t       *linkPtr = le_dls_Peek(&entryRef->childList);
+    resTree_EntryRef_t   childPtr;
+
+    if (linkPtr != NULL)
+    {
+        childPtr = CONTAINER_OF(linkPtr, Entry_t, link);
+        if (withZombies || !resTree_IsDeleted(childPtr))
+        {
+            return childPtr;
+        }
+    }
+
+    return NULL;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -852,16 +911,45 @@ resTree_EntryRef_t resTree_GetFirstChild
 )
 //--------------------------------------------------------------------------------------------------
 {
-    le_dls_Link_t* linkPtr = le_dls_Peek(&entryRef->childList);
+    return resTree_GetFirstChildEx(entryRef, false);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the next sibling (child of the same parent) of a given entry, optionally including already
+ * deleted nodes if they have not been flushed.
+ *
+ * @return Reference to the next entry in the parent's child list, or
+ *         NULL if already at the last child.
+ */
+//--------------------------------------------------------------------------------------------------
+resTree_EntryRef_t resTree_GetNextSiblingEx
+(
+    resTree_EntryRef_t  entryRef,   ///< Node to get the sibling of.
+    bool                withZombies ///< If the sibling has been deleted but is still around, return
+                                    ///< it.
+)
+{
+    if (entryRef->parentPtr == NULL)
+    {
+        // Someone called this function for the Root entry.
+        return NULL;
+    }
+
+    le_dls_Link_t       *linkPtr = le_dls_PeekNext(&entryRef->parentPtr->childList, &entryRef->link);
+    resTree_EntryRef_t   childPtr;
 
     if (linkPtr != NULL)
     {
-        return CONTAINER_OF(linkPtr, Entry_t, link);
+        childPtr = CONTAINER_OF(linkPtr, Entry_t, link);
+        if (withZombies || !resTree_IsDeleted(childPtr))
+        {
+            return childPtr;
+        }
     }
 
     return NULL;
 }
-
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -877,20 +965,7 @@ resTree_EntryRef_t resTree_GetNextSibling
 )
 //--------------------------------------------------------------------------------------------------
 {
-    if (entryRef->parentPtr == NULL)
-    {
-        // Someone called this function for the Root entry.
-        return NULL;
-    }
-
-    le_dls_Link_t* linkPtr = le_dls_PeekNext(&entryRef->parentPtr->childList, &entryRef->link);
-
-    if (linkPtr != NULL)
-    {
-        return CONTAINER_OF(linkPtr, Entry_t, link);
-    }
-
-    return NULL;
+    return resTree_GetNextSiblingEx(entryRef, false);
 }
 
 
@@ -1064,8 +1139,10 @@ void resTree_DeleteIO
         // Release the IO resource.
         le_mem_Release(ioPtr);
 
+        // Record the deletion.
+        snapshot_RecordNodeDeletion(entryRef);
+
         // Release the resource tree entry.
-        // This will cause it to be removed from the resource tree.
         le_mem_Release(entryRef);
     }
 }
@@ -1091,8 +1168,10 @@ void resTree_DeleteObservation
     obsEntry->u.flags = 0;
     obsEntry->type = ADMIN_ENTRY_TYPE_NAMESPACE;
 
-    // Release the namespace (resource tree entry).  This will cause it to be removed from the
-    // resource tree.
+    // Record the deletion.
+    snapshot_RecordNodeDeletion(obsEntry);
+
+    // Release the namespace (resource tree entry).
     le_mem_Release(obsEntry);
 }
 
@@ -1601,7 +1680,14 @@ void resTree_SetRelevance
 {
     if (resEntry->type == ADMIN_ENTRY_TYPE_NAMESPACE)
     {
-        resEntry->u.flags |= RES_FLAG_RELEVANT;
+        if (relevant)
+        {
+            resEntry->u.flags |= RES_FLAG_RELEVANT;
+        }
+        else
+        {
+            resEntry->u.flags &= ~RES_FLAG_RELEVANT;
+        }
     }
     else
     {
@@ -1628,6 +1714,93 @@ bool resTree_IsRelevant
     else
     {
         return res_IsRelevant(resEntry->u.resourcePtr);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a node as no longer "new."  New nodes are those that were created after the last snapshot
+ * scan of the tree.
+ */
+//--------------------------------------------------------------------------------------------------
+void resTree_ClearNewness
+(
+    resTree_EntryRef_t resEntry ///< Resource to update.
+)
+{
+    if (resEntry->type == ADMIN_ENTRY_TYPE_NAMESPACE)
+    {
+        resEntry->u.flags &= ~RES_FLAG_NEW;
+    }
+    else
+    {
+        res_ClearNewness(resEntry->u.resourcePtr);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the node's "newness" flag.
+ *
+ * @return Whether the node was created after the last scan.
+ */
+//--------------------------------------------------------------------------------------------------
+bool resTree_IsNew
+(
+    resTree_EntryRef_t resEntry ///< Resource to query.
+)
+{
+    if (resEntry->type == ADMIN_ENTRY_TYPE_NAMESPACE)
+    {
+        return (resEntry->u.flags & RES_FLAG_NEW);
+    }
+    else
+    {
+        return res_IsNew(resEntry->u.resourcePtr);
+    }
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a node as deleted.
+ */
+//--------------------------------------------------------------------------------------------------
+void resTree_SetDeleted
+(
+    resTree_EntryRef_t resEntry ///< Resource to update.
+)
+{
+    // The deleted flag should only be set on nodes which have already been converted to namespaces
+    // as part of the deletion cleanup process.
+    LE_ASSERT(resEntry->type == ADMIN_ENTRY_TYPE_NAMESPACE);
+    // The deletion flag should not be set on nodes which have not been scanned yet, as there is no
+    // point in keeping them around as a deletion record.
+    LE_ASSERT((resEntry->u.flags & RES_FLAG_NEW) == 0);
+
+    resEntry->u.flags |= RES_FLAG_DELETED;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the node's "deleted" flag.
+ *
+ * @return Whether the node was deleted after the last flush.
+ */
+//--------------------------------------------------------------------------------------------------
+bool resTree_IsDeleted
+(
+    resTree_EntryRef_t resEntry ///< Resource to query.
+)
+{
+    if (resEntry->type == ADMIN_ENTRY_TYPE_NAMESPACE)
+    {
+        return (resEntry->u.flags & RES_FLAG_DELETED);
+    }
+    else
+    {
+        // All deleted nodes are converted to namespaces during the deletion process, so if it is
+        // not a namespace, it can't be considered deleted.
+        return false;
     }
 }
 

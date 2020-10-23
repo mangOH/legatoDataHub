@@ -667,7 +667,7 @@ DEFINE BEGINNING_OF_TIME = 0;
 /*
  * Capture a snapshot of the resource tree.
  *
- * The snapshot will be of the portion of the tree rooted at the given pathe, and include all values
+ * The snapshot will be of the portion of the tree rooted at the given path, and include all values
  * which have changed since the provided time stamp.  The response will be encoded according to the
  * specified formatter and streamed back to the requester via the provided file handle.  The end of
  * data or an error will be indicated by invoking the provided callback with a result code.
@@ -701,13 +701,13 @@ FUNCTION TakeSnapshot
 /*
  * Control whether deletion records should be maintained within the Data Hub.
  *
- * Turning on deletion tracking will cause a small amount of metadata to be retained for each
- * deleted resource.  This metadata will be supplied to the formatter when a snapshot is requested
- * so that nodes which have disappeared from the tree can be recorded appropriately.  Because this
- * metadata will gradually accumulate over time as nodes are removed, there are two ways of
- * requesting that the deletion data be flushed.  The first is to just disable and then reenable
- * tracking using this function.  The second is to pass the SNAPSHOT_FLAG_FLUSH_DELETIONS flag when
- * requesting a snapshot.
+ * Turning on deletion tracking will cause some metadata to be retained for each deleted resource.
+ * This metadata will be supplied to the formatter when a snapshot is requested so that nodes which
+ * have disappeared from the tree can be recorded appropriately.  Because this metadata will
+ * gradually accumulate over time as nodes are removed, there are two ways of requesting that the
+ * deletion data be flushed.  The first is to just disable and then reenable tracking using this
+ * function.  The second is to pass the SNAPSHOT_FLAG_FLUSH_DELETIONS flag when requesting a
+ * snapshot.
  */
 //--------------------------------------------------------------------------------------------------
 FUNCTION TrackDeletions

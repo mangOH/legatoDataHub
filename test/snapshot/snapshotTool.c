@@ -161,7 +161,7 @@ static void HandleHelpRequest
 )
 {
     puts(
-        "Usage: dsnap [-h] [-f <format>] [-s <since>] [-p <path>]"
+        "Usage: dsnap [-h] [-f <format>] [-t on|off] [-s <since>] [-p <path>]"
 #if LE_CONFIG_FILESYSTEM
         " [-o <output>]"
 #endif
@@ -171,6 +171,7 @@ static void HandleHelpRequest
         "\n"
         "    -h, --help              Display this help.\n"
         "    -f, --format=<string>   Set output format to <string> (only \"json\" so far).\n"
+        "    -t, --track=on|off      Turn deletion tracking on or off.  Default is off.\n"
         "    -s, --since=<number>    Only output information for records that have changed since\n"
         "                            <number> seconds from the Epoch.  Default (no limit) is 0.\n"
         "    -p, --path=<string>     Only consider the tree at and beneath the path <string>.\n"
@@ -196,10 +197,11 @@ COMPONENT_INIT
     const char  *outputStr = NULL;
     const char  *pathStr = "/";
     const char  *sinceStr = "0";
+    const char  *trackStr = "";
     double       since;
     int          formatStream = -1;
     le_result_t  result;
-    uint32_t     flags = 0;
+    uint32_t     flags = QUERY_SNAPSHOT_FLAG_FLUSH_DELETIONS;
     uint32_t     format;
 
     LE_ASSERT(MonitorRef == NULL);
@@ -209,6 +211,7 @@ COMPONENT_INIT
     le_arg_SetFlagCallback(&HandleHelpRequest, "h", "help");
     le_arg_SetStringVar(&formatStr, "f", "format");
     le_arg_SetStringVar(&sinceStr, "s", "since");
+    le_arg_SetStringVar(&trackStr, "t", "track");
     le_arg_SetStringVar(&pathStr, "p", "path");
 #if LE_CONFIG_FILESYSTEM
     le_arg_SetStringVar(&outputStr, "o", "output");
@@ -239,6 +242,29 @@ COMPONENT_INIT
         DoExit(EXIT_FAILURE);
     }
 
+    // Connect to the Data Hub.
+    result = query_TryConnectService();
+    if (result != LE_OK)
+    {
+        LE_ERROR("Got %s while connecting to Data Hub Query API", LE_RESULT_TXT(result));
+        DoExit(EXIT_FAILURE);
+    }
+    Connected = true;
+
+    // If just setting the deletion tracking, do that and quit.
+    if (strcmp(trackStr, "on") == 0)
+    {
+        LE_INFO("Activating deletion tracking");
+        query_TrackDeletions(true);
+        DoExit(EXIT_SUCCESS);
+    }
+    else if (strcmp(trackStr, "off") == 0)
+    {
+        LE_INFO("Deactivating deletion tracking");
+        query_TrackDeletions(false);
+        DoExit(EXIT_SUCCESS);
+    }
+
     if (outputStr == NULL)
     {
         OutFile = STDOUT_FILENO;
@@ -249,15 +275,6 @@ COMPONENT_INIT
             S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH);
     }
     LE_ASSERT(OutFile >= 0);
-
-    // Connect to the Data Hub.
-    result = query_TryConnectService();
-    if (result != LE_OK)
-    {
-        LE_ERROR("Got %s while connecting to Data Hub Query API", LE_RESULT_TXT(result));
-        DoExit(EXIT_FAILURE);
-    }
-    Connected = true;
 
     // Initiate the snapshot.
     query_TakeSnapshot(format, flags, pathStr, since, &HandleResult, NULL, &formatStream);

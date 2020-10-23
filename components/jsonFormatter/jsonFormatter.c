@@ -12,6 +12,11 @@
 #include "dataHub.h"
 #include "snapshot.h"
 
+/// Filter bitmask for live node detection.
+#define LIVE_FILTERS    (SNAPSHOT_FILTER_CREATED | SNAPSHOT_FILTER_NORMAL)
+/// Filter bitmask for all possible filters.
+#define ALL_FILTERS     (LIVE_FILTERS | SNAPSHOT_FILTER_DELETED)
+
 /// Internal formatter states.
 typedef enum
 {
@@ -302,7 +307,7 @@ static void BufferFormatted
  * @return String representing the boolean value.
  */
 //--------------------------------------------------------------------------------------------------
-static inline const char *Bool2Str
+static const char *Bool2Str
 (
     bool value ///< Boolean value.
 )
@@ -323,18 +328,27 @@ static void StartTree
     char             path[HUB_MAX_RESOURCE_PATH_BYTES];
     JsonFormatter_t *jsonFormatter = CONTAINER_OF(formatter, JsonFormatter_t, base);
 
+    LE_ASSERT(formatter->filter & ALL_FILTERS);
+
     LE_DEBUG("Starting tree");
 
-    // Buffer is sized such that it should never overflow, and the referenced nodes must exist.
-    LE_ASSERT(resTree_GetPath(path, sizeof(path), resTree_GetRoot(), snapshot_GetNode()) >= 0);
+    if (formatter->filter & LIVE_FILTERS)
+    {
+        // Buffer is sized such that it should never overflow, and the referenced nodes must exist.
+        LE_ASSERT(resTree_GetPath(path, sizeof(path), resTree_GetRoot(), snapshot_GetNode()) >= 0);
 
-    BufferFormatted(
-        jsonFormatter,
-        false,
-        "{\"ts\":%lf,\"root\":\"%s\",\"upserted\":",
-        snapshot_GetTimestamp(),
-        path
-    );
+        BufferFormatted(
+            jsonFormatter,
+            false,
+            "{\"ts\":%lf,\"root\":\"%s\",\"upserted\":",
+            snapshot_GetTimestamp(),
+            path
+        );
+    }
+    else
+    {
+        BufferString(jsonFormatter, true, "\"deleted\":");
+    }
 
     // Now we wait for the buffer to drain and call snapshot_Step() when it is done.
     jsonFormatter->isRoot = true;
@@ -352,6 +366,8 @@ static void BeginNode
 )
 {
     JsonFormatter_t *jsonFormatter = CONTAINER_OF(formatter, JsonFormatter_t, base);
+
+    LE_ASSERT(formatter->filter & ALL_FILTERS);
 
     if (jsonFormatter->isRoot)
     {
@@ -385,6 +401,8 @@ static void NodeName
 {
     const char *name = resTree_GetEntryName(snapshot_GetNode());
 
+    LE_ASSERT(jsonFormatter->base.filter & ALL_FILTERS);
+
     LE_DEBUG("Output node name: '%s'", name);
     BufferString(jsonFormatter, false, name);
     jsonFormatter->needsComma = false;
@@ -404,17 +422,19 @@ static void NodeOpen
     resTree_EntryRef_t  node = snapshot_GetNode();
     admin_EntryType_t   entryType = resTree_GetEntryType(node);
 
+    LE_ASSERT(jsonFormatter->base.filter & ALL_FILTERS);
+
     LE_DEBUG("Open node contents");
 
     // Non-root node is preceded by `"<name>` so close that off and open the node object.
     BufferFormatted(jsonFormatter, false, "%s{", (jsonFormatter->isRoot ? "" : "\":"));
+
     jsonFormatter->isRoot = false;
     jsonFormatter->needsComma = false;
 
     switch (entryType)
     {
         case ADMIN_ENTRY_TYPE_NAMESPACE:
-        case ADMIN_ENTRY_TYPE_PLACEHOLDER:
             // These node types have no additional fields of their own, so proceed to any children
             // by stepping the outer state machine.
             jsonFormatter->nextState = STATE_SNAPSHOT_STEP;
@@ -422,7 +442,8 @@ static void NodeOpen
         case ADMIN_ENTRY_TYPE_INPUT:
         case ADMIN_ENTRY_TYPE_OUTPUT:
         case ADMIN_ENTRY_TYPE_OBSERVATION:
-            if (snapshot_IsTimely(node))
+        case ADMIN_ENTRY_TYPE_PLACEHOLDER:
+            if ((jsonFormatter->base.filter & LIVE_FILTERS) && snapshot_IsTimely(node))
             {
                 // These node types have additional fields of their own, so start the sequence of
                 // outputting those.
@@ -456,6 +477,7 @@ static void NodeValues
     dataSample_Ref_t    sample = resTree_GetCurrentValue(node);
     io_DataType_t       dataType = resTree_GetDataType(node);
 
+    LE_ASSERT(jsonFormatter->base.filter & LIVE_FILTERS);
 
     LE_DEBUG("Output node values");
 
@@ -465,10 +487,11 @@ static void NodeValues
     BufferFormatted(
         jsonFormatter,
         false,
-        "\"type\":%u,\"ts\":%lf,\"mandatory\":%s",
+        "\"type\":%u,\"ts\":%lf,\"mandatory\":%s,\"new\":%s",
         dataType,
         dataSample_GetTimestamp(sample),
-        Bool2Str(resTree_IsMandatory(node))
+        Bool2Str(resTree_IsMandatory(node)),
+        Bool2Str(resTree_IsNew(node))
     );
     jsonFormatter->needsComma = true;
 
@@ -511,6 +534,8 @@ static void NodeValueBody
     dataSample_Ref_t    sample = resTree_GetCurrentValue(node);
     io_DataType_t       dataType = resTree_GetDataType(node);
 
+    LE_ASSERT(jsonFormatter->base.filter & LIVE_FILTERS);
+
     LE_DEBUG("Output node value body");
 
     // Don't check comma flag here because this is the value part of a key/value pair and would
@@ -547,13 +572,50 @@ static void EndObject
 {
     JsonFormatter_t *jsonFormatter = CONTAINER_OF(formatter, JsonFormatter_t, base);
 
-    LE_DEBUG("Closing object");
+    LE_ASSERT(formatter->filter & ALL_FILTERS);
 
+    LE_DEBUG("Closing object");
     BufferString(jsonFormatter, false, "}");
 
     // Now we wait for the buffer to drain and call snapshot_Step() when it is done.
     jsonFormatter->needsComma = true;
     jsonFormatter->nextState = STATE_SNAPSHOT_STEP;
+}
+
+//--------------------------------------------------------------------------------------------------
+/*
+ * Finish formatting a tree.
+ */
+//--------------------------------------------------------------------------------------------------
+static void EndTree
+(
+    snapshot_Formatter_t *formatter ///< Formatter instance.
+)
+{
+    JsonFormatter_t *jsonFormatter = CONTAINER_OF(formatter, JsonFormatter_t, base);
+
+    LE_ASSERT(formatter->filter & ALL_FILTERS);
+
+    LE_DEBUG("Closing tree");
+    jsonFormatter->nextState = STATE_SNAPSHOT_STEP;
+
+    // Determine if a second pass is needed for deleted items.
+    formatter->scan = (formatter->filter & LIVE_FILTERS);
+    if (formatter->scan)
+    {
+        formatter->filter = SNAPSHOT_FILTER_DELETED;
+        jsonFormatter->needsComma = true;
+
+        // Directly step, as there is nothing to output here.
+        Step(jsonFormatter);
+    }
+    else
+    {
+        BufferString(jsonFormatter, false, "}");
+
+        // Now we wait for the buffer to drain and call snapshot_Step() when it is done.
+        jsonFormatter->needsComma = false;
+    }
 }
 
 //--------------------------------------------------------------------------------------------------
@@ -648,7 +710,7 @@ le_result_t GetJsonSnapshotFormatter
             .startTree  = &StartTree,
             .beginNode  = &BeginNode,
             .endNode    = &EndObject,
-            .endTree    = &EndObject,
+            .endTree    = &EndTree,
             .close      = &Close
         }
     };
@@ -664,6 +726,9 @@ le_result_t GetJsonSnapshotFormatter
     jsonFormatter.needsComma    = false;
     jsonFormatter.isRoot        = true;
     jsonFormatter.nextState     = STATE_START;
+
+    jsonFormatter.base.filter   = LIVE_FILTERS;
+    jsonFormatter.base.scan     = true;
 
     LE_DEBUG("JSON formatter transition: -> STATE_START");
 

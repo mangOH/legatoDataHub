@@ -137,7 +137,7 @@ void res_Construct
     resPtr->overrideType = IO_DATA_TYPE_TRIGGER;
     resPtr->defaultValue = NULL;
     resPtr->defaultType = IO_DATA_TYPE_TRIGGER;
-    resPtr->flags = 0;
+    resPtr->flags = RES_FLAG_NEW;
     resPtr->pushHandlerList = LE_DLS_LIST_INIT;
     resPtr->jsonExample = NULL;
 }
@@ -1523,6 +1523,35 @@ bool res_IsRelevant
 )
 {
     return (resPtr->flags & RES_FLAG_RELEVANT);
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a resource as no longer "new."  "New" resources are those that were created after the last
+ * snapshot scan of the tree.
+ */
+//--------------------------------------------------------------------------------------------------
+void res_ClearNewness
+(
+    res_Resource_t *resPtr ///< Resource to query.
+)
+{
+    resPtr->flags &= ~RES_FLAG_NEW;
+}
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the resource's "newness" flag.
+ *
+ * @return Whether the resource was created after the last scan.
+ */
+//--------------------------------------------------------------------------------------------------
+bool res_IsNew
+(
+    res_Resource_t *resPtr ///< Resource to query.
+)
+{
+    return (resPtr->flags & RES_FLAG_NEW);
 }
 
 //--------------------------------------------------------------------------------------------------

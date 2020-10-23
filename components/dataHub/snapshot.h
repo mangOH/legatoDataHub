@@ -14,6 +14,13 @@
 
 #include "legato.h"
 
+/// Filter for newly created nodes.
+#define SNAPSHOT_FILTER_CREATED 0x1
+/// Filter for deleted nodes.
+#define SNAPSHOT_FILTER_DELETED 0x2
+/// Filter for normal nodes (i.e. not new or deleted).
+#define SNAPSHOT_FILTER_NORMAL  0x4
+
 // Forward reference.
 struct snapshot_Formatter;
 
@@ -46,6 +53,9 @@ typedef struct snapshot_Formatter
     formatter_Callback_t endNode;   ///< Callback to format the end of an open tree node.
     formatter_Callback_t endTree;   ///< Callback to format the end of all tree nodes.
     formatter_Callback_t close;     ///< Callback to close and clean up the formatter instance.
+
+    bool        scan;   ///< Request a scan of the resource tree.
+    uint32_t    filter; ///< Mask to filter nodes during tree traversal.
 } snapshot_Formatter_t;
 
 //--------------------------------------------------------------------------------------------------
@@ -56,6 +66,16 @@ typedef struct snapshot_Formatter
 void snapshot_Init
 (
     void
+);
+
+//--------------------------------------------------------------------------------------------------
+/*
+ *  Record the deletion of a node so that it can be included with a snapshot.
+ */
+//--------------------------------------------------------------------------------------------------
+void snapshot_RecordNodeDeletion
+(
+    resTree_EntryRef_t nodeRef  ///< Deleted node.
 );
 
 //--------------------------------------------------------------------------------------------------

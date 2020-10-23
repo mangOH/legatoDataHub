@@ -74,6 +74,21 @@ bool resTree_IsResource
     resTree_EntryRef_t entryRef
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Find a child entry with a given name, optionally including already deleted nodes if they have not
+ * been flushed.
+ *
+ * @return Reference to the object or NULL if not found.
+ */
+//--------------------------------------------------------------------------------------------------
+resTree_EntryRef_t resTree_FindChildEx
+(
+    resTree_EntryRef_t   nsRef,         ///< Namespace entry to search.
+    const char          *name,          ///< Name of the child entry.
+    bool                 withZombies    ///< If the child has been deleted but is still around,
+                                        ///< return it.
+);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -293,6 +308,20 @@ LE_SHARED ssize_t resTree_GetPath
     resTree_EntryRef_t entryRef
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the first child of a given entry, optionally including already deleted nodes if they have not
+ * been flushed.
+ *
+ * @return Reference to the first child entry, or NULL if the entry has no children.
+ */
+//--------------------------------------------------------------------------------------------------
+resTree_EntryRef_t resTree_GetFirstChildEx
+(
+    resTree_EntryRef_t  entryRef,   ///< Node to get the child of.
+    bool                withZombies ///< If the child has been deleted but is still around, return
+                                    ///< it.
+);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -301,11 +330,26 @@ LE_SHARED ssize_t resTree_GetPath
  * @return Reference to the first child entry, or NULL if the entry has no children.
  */
 //--------------------------------------------------------------------------------------------------
-resTree_EntryRef_t resTree_GetFirstChild
+LE_SHARED resTree_EntryRef_t resTree_GetFirstChild
 (
     resTree_EntryRef_t entryRef
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the next sibling (child of the same parent) of a given entry, optionally including already
+ * deleted nodes if they have not been flushed.
+ *
+ * @return Reference to the next entry in the parent's child list, or
+ *         NULL if already at the last child.
+ */
+//--------------------------------------------------------------------------------------------------
+resTree_EntryRef_t resTree_GetNextSiblingEx
+(
+    resTree_EntryRef_t  entryRef,   ///< Node to get the sibling of.
+    bool                withZombies ///< If the sibling has been deleted but is still around, return
+                                    ///< it.
+);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -317,7 +361,7 @@ resTree_EntryRef_t resTree_GetFirstChild
  * @warning Do not call this for the Root Entry.
  */
 //--------------------------------------------------------------------------------------------------
-resTree_EntryRef_t resTree_GetNextSibling
+LE_SHARED resTree_EntryRef_t resTree_GetNextSibling
 (
     resTree_EntryRef_t entryRef
 );
@@ -816,6 +860,51 @@ void resTree_SetRelevance
  */
 //--------------------------------------------------------------------------------------------------
 bool resTree_IsRelevant
+(
+    resTree_EntryRef_t resEntry ///< Resource to query.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a node as no longer "new."  New nodes are those that were created after the last snapshot
+ * scan of the tree.
+ */
+//--------------------------------------------------------------------------------------------------
+void resTree_ClearNewness
+(
+    resTree_EntryRef_t resEntry ///< Resource to update.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the node's "newness" flag.
+ *
+ * @return Whether the node was created after the last scan.
+ */
+//--------------------------------------------------------------------------------------------------
+LE_SHARED bool resTree_IsNew
+(
+    resTree_EntryRef_t resEntry ///< Resource to query.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a node as deleted.
+ */
+//--------------------------------------------------------------------------------------------------
+void resTree_SetDeleted
+(
+    resTree_EntryRef_t resEntry ///< Resource to update.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the node's "deleted" flag.
+ *
+ * @return Whether the node was deleted after the last flush.
+ */
+//--------------------------------------------------------------------------------------------------
+LE_SHARED bool resTree_IsDeleted
 (
     resTree_EntryRef_t resEntry ///< Resource to query.
 );

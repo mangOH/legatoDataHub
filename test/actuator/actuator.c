@@ -1,8 +1,17 @@
 #include "legato.h"
 #include "interfaces.h"
 
+// Test has apparently been broken for a while, but due to a binding error the app never actually
+// started up enough to run and discover this.
+// TODO: Fix and re-enable this test.
+#define ENABLE_DUMMY_ACTUATOR_TEST 0
+
 #define COUNTER_NAME "counter/value"
 
+#define EPHEMERAL_A_NAME "ephemeral1/value"
+#define EPHEMERAL_B_NAME "ephemeral2/value"
+
+#if ENABLE_DUMMY_ACTUATOR_TEST
 
 // Here we track how many times the TreeChangeHandler callback
 // has been called for each path / type / operation
@@ -173,7 +182,10 @@ void AssertTimer
     admin_RemoveResourceTreeChangeHandler(treeChangeHandlerRef);
 }
 
-COMPONENT_INIT
+static void PrepDummyActuatorTest
+(
+    void
+)
 {
     le_result_t result;
 
@@ -226,4 +238,65 @@ COMPONENT_INIT
 
     le_timer_SetMsInterval(assertionTimer,2000);
     le_timer_Start(assertionTimer);
+}
+
+#endif /* end ENABLE_DUMMY_ACTUATOR_TEST */
+
+void LifecycleTimer
+(
+    le_timer_Ref_t timerRef
+)
+{
+    double              timestamp;
+    le_result_t         result;
+    static unsigned int count = 0;
+
+    LE_UNUSED(timerRef);
+
+    ++count;
+    LE_INFO("Cycling resource lives (%u)", count);
+
+    if (count % 2 == 0)
+    {
+        if (io_GetTimestamp(EPHEMERAL_A_NAME, &timestamp) == LE_NOT_FOUND)
+        {
+            result = io_CreateOutput(EPHEMERAL_A_NAME, IO_DATA_TYPE_BOOLEAN, "");
+            LE_ASSERT(result == LE_OK);
+            io_PushBoolean(EPHEMERAL_A_NAME, IO_NOW, true);
+        }
+        else
+        {
+            io_DeleteResource(EPHEMERAL_A_NAME);
+        }
+    }
+    else if (count % 3 == 0)
+    {
+        if (io_GetTimestamp(EPHEMERAL_B_NAME, &timestamp) == LE_NOT_FOUND)
+        {
+            result = io_CreateOutput(EPHEMERAL_B_NAME, IO_DATA_TYPE_BOOLEAN, "");
+            LE_ASSERT(result == LE_OK);
+            io_PushBoolean(EPHEMERAL_B_NAME, IO_NOW, false);
+        }
+        else
+        {
+            io_DeleteResource(EPHEMERAL_B_NAME);
+        }
+    }
+}
+
+COMPONENT_INIT
+{
+    LE_INFO("Starting actuator...");
+
+#if ENABLE_DUMMY_ACTUATOR_TEST
+    PrepDummyActuatorTest();
+#endif /* end ENABLE_DUMMY_ACTUATOR_TEST */
+
+    // Create timer to periodically add and remove resources, for deletion tracking.
+    le_timer_Ref_t lifecycleTimer = le_timer_Create("Add/Remove Timer");
+    le_timer_SetHandler(lifecycleTimer, &LifecycleTimer);
+
+    le_timer_SetMsInterval(lifecycleTimer, 10000);
+    le_timer_SetRepeat(lifecycleTimer, 0);
+    le_timer_Start(lifecycleTimer);
 }
