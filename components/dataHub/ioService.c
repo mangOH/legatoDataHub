@@ -80,6 +80,29 @@ static resTree_EntryRef_t FindResource
     return entryRef;
 }
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the client application's namespace to be used for the following calls
+ *
+ * @return:
+ *  - LE_OK if setting client's namespace was successful.
+ *  - LE_DUPLICATE if namespace has already been set.
+ *  - LE_NOT_PERMITTED if setting client's namespace is not permitted. Client application's name
+ *      will be used as namespace in this case.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t io_SetNamespace
+(
+    const char* appNamespace    ///< [IN] Client application's namespace.
+)
+//--------------------------------------------------------------------------------------------------
+{
+#if LE_CONFIG_LINUX
+    return LE_NOT_PERMITTED;
+#else
+    return hub_SetClientNamespace(io_GetClientSessionRef(), appNamespace);
+#endif
+}
 
 //--------------------------------------------------------------------------------------------------
 /**

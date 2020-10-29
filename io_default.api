@@ -50,8 +50,13 @@
  *
  * The path of a resource is its unique identifier within the Data Hub's resource tree.
  *
- * Each client of the I/O API is provided with its own namespace in the Data Hub's resource tree,
- * so there's no need to worry about naming conflicts or access violations between client apps.
+ * Each client of the I/O API is provided with its own namespace in the Data Hub's resource tree.
+ * On Linux this namespace is always set to the client application's name. On Non-Linux platforms,
+ * namespace can be set using the io_SetNamespace function. If no namespace is set the client
+ * application's name will be be used as namespace unless the client is accessing Data Hub
+ * through rpcProxy, in which case "rpcProxy" will be the default namespace.
+ *
+ * @note Namespace must be set before using any other I/O API.
  *
  * For example, an app named "tempSensor" could create an input with the path "temperature/value".
  * This would appear in the global resource tree at "/app/tempSensor/temperature/value".
@@ -333,6 +338,7 @@
  */
 //--------------------------------------------------------------------------------------------------
 
+USETYPES le_limit.api;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -364,6 +370,12 @@ DEFINE MAX_STRING_VALUE_LEN = 50000;
 //--------------------------------------------------------------------------------------------------
 DEFINE MAX_UNITS_NAME_LEN = 23;
 
+//-------------------------------------------------------------------------------------------------
+/**
+ * Maximum length of client application's namespace.
+ */
+//--------------------------------------------------------------------------------------------------
+DEFINE MAX_NAMESPACE_LEN = le_limit.APP_NAME_LEN;
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -379,6 +391,21 @@ ENUM DataType
     DATA_TYPE_JSON      ///< JSON
 };
 
+//-------------------------------------------------------------------------------------------------
+/**
+ * Set the client application's namespace to be used for the following calls.
+ *
+ * @return
+ *  - LE_OK if namespace was set successfully.
+ *  - LE_DUPLICATE if namespace has already been set.
+ *  - LE_NOT_PERMITTED if setting client's namespace is not permitted. Client application's name
+ *      will be used as namespace in this case.
+ */
+//--------------------------------------------------------------------------------------------------
+FUNCTION le_result_t SetNamespace
+(
+    string appNamespace[MAX_NAMESPACE_LEN] IN  ///< Client application's namespace.
+);
 
 //--------------------------------------------------------------------------------------------------
 /**

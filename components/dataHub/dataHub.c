@@ -127,6 +127,44 @@ const char* hub_GetEntryTypeName
     LE_FATAL("Unknown entry type %d.", type);
 }
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the client app's namespace.
+ *
+ * @return:
+ *  - LE_OK if setting client's namespace was successful.
+ *  - LE_DUPLICATE if namespace has already been set.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t hub_SetClientNamespace
+(
+    le_msg_SessionRef_t sessionRef,  ///< [IN] IPC session reference.
+    const char* appNamespace         ///< [IN] namespace
+)
+//--------------------------------------------------------------------------------------------------
+{
+    if (le_msg_GetSessionContextPtr(sessionRef) != NULL)
+    {
+        return LE_DUPLICATE;
+    }
+
+    resTree_EntryRef_t nsRef;
+    // Get the "/app" namespace first.
+    nsRef = resTree_GetEntry(resTree_GetRoot(), "app");
+    // Now get the app's namespace under the /app namespace.
+    nsRef = resTree_GetEntry(nsRef, appNamespace);
+
+    le_mem_AddRef(nsRef);
+
+    // TODO: Need to remove this and instead release nsRef in client disconnection handler.
+#if LE_CONFIG_LINUX
+    LE_FATAL("Not Permitted on Linux");
+#endif
+
+    // Store the namespace entry reference as the IPC session Context Ptr
+    le_msg_SetSessionContextPtr(sessionRef, nsRef);
+    return LE_OK;
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -137,20 +175,17 @@ const char* hub_GetEntryTypeName
 //--------------------------------------------------------------------------------------------------
 resTree_EntryRef_t hub_GetClientNamespace
 (
-    le_msg_SessionRef_t sessionRef  ///< IPC session reference.
+    le_msg_SessionRef_t sessionRef  ///< [IN] IPC session reference.
 )
 //--------------------------------------------------------------------------------------------------
 {
     resTree_EntryRef_t nsRef;
 
-#if LE_CONFIG_LINUX
-    // See if we already looked up the app name, etc. and saved it as the IPC session context ptr.
     nsRef = le_msg_GetSessionContextPtr(sessionRef);
     if (nsRef != NULL)
     {
         return nsRef;
     }
-#endif /* end LE_CONFIG_LINUX */
 
     // Get the client app name.
     pid_t clientPid;
@@ -167,37 +202,13 @@ resTree_EntryRef_t hub_GetClientNamespace
         LE_KILL_CLIENT("Unable to retrieve client app name (%s)", LE_RESULT_TXT(result));
         return NULL;
     }
-
-#if LE_CONFIG_TARGET_HL78MCU && WITH_OCTAVE
-    //
-    // JV: hack away rpcProxy and cmdTools app names until LE-15082
-    //
-
-    //LE_INFO("is it rpcProxy?: '%s'",appName);
-    if (strncmp(appName, "rpcProxy", LE_LIMIT_APP_NAME_LEN) == 0)
-    {
-        strncpy(appName, "cloudInterface", LE_LIMIT_APP_NAME_LEN);
-        LE_DEBUG("changed rpcProxy to '%s'",appName);
-    }
-    else if (strncmp(appName, "cmdTools", LE_LIMIT_APP_NAME_LEN) == 0)
-    {
-        strncpy(appName, "orp", LE_LIMIT_APP_NAME_LEN);
-        LE_DEBUG("changed cmdTools to '%s'",appName);
-    }
-#endif /* end LE_CONFIG_TARGET_HL78MCU && WITH_OCTAVE */
-
     // Get the "/app" namespace first.
     nsRef = resTree_GetEntry(resTree_GetRoot(), "app");
-
     // Now get the app's namespace under the /app namespace.
     nsRef = resTree_GetEntry(nsRef, appName);
-
-#if LE_CONFIG_LINUX
     // Store the namespace entry reference as the IPC session Context Ptr to speed things up
     // next time.
     le_msg_SetSessionContextPtr(sessionRef, nsRef);
-#endif /* end LE_CONFIG_LINUX */
-
     return nsRef;
 }
 

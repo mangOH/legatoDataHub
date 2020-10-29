@@ -30,8 +30,9 @@
  *  - Placeholder - a placeholder for a yet to be created resource
  *
  * Inputs and Outputs are created by external apps using the @ref c_dataHubIo.  The Inputs and
- * Outputs created by a given app "x" reside under a namespace "/app/x" that is reserved for that
- * app.  See @ref c_dataHubIo for more information on the structure of these parts of the
+ * Outputs created by a given app reside under a namespace "/app/namespace" that can be set using
+ * io_SetNamespace and query_SetNamespace before creating any io or doing any query.
+ * See @ref c_dataHubIo for more information on the structure of these parts of the
  * resource tree.
  *
  * Observations are created via the Admin API (this API; see below).
