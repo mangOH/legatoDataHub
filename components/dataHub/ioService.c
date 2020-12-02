@@ -475,7 +475,7 @@ void io_PushJson
  * Add a handler function to be called when a value is pushed to (and accepted by) an Input
  * or Output in the client app's namespace.
  *
- * @return A reference to the handler or NULL if failed and client has been killed.
+ * @return A reference to the handler or NULL if failed.
  */
 //--------------------------------------------------------------------------------------------------
 static hub_HandlerRef_t AddPushHandler
@@ -529,6 +529,14 @@ static hub_HandlerRef_t AddPushHandler
 //--------------------------------------------------------------------------------------------------
 /**
  * Add handler function for EVENT 'io_TriggerPush'
+ *
+ * @return reference to the added push handler, or NULL if the path is malformed.
+ *
+ * @note If a NULL reference is returned, the IPC system should just store this and
+ *       use it as the handler reference when removing the handler later. handler_Remove()
+ *       will report an error when this happens, but there will be no other adverse effects.
+ *       On the other side of the IPC link, the client will not see the NULL, as it will
+ *       be replaced by a reference to a local proxy handler object.
  */
 //--------------------------------------------------------------------------------------------------
 io_TriggerPushHandlerRef_t io_AddTriggerPushHandler
@@ -568,6 +576,14 @@ void io_RemoveTriggerPushHandler
 //--------------------------------------------------------------------------------------------------
 /**
  * Add handler function for EVENT 'io_BooleanPush'
+ *
+ * @return reference to the added push handler, or NULL if the path is malformed.
+ *
+ * @note If a NULL reference is returned, the IPC system should just store this and
+ *       use it as the handler reference when removing the handler later. handler_Remove()
+ *       will report an error when this happens, but there will be no other adverse effects.
+ *       On the other side of the IPC link, the client will not see the NULL, as it will
+ *       be replaced by a reference to a local proxy handler object.
  */
 //--------------------------------------------------------------------------------------------------
 io_BooleanPushHandlerRef_t io_AddBooleanPushHandler
@@ -607,6 +623,14 @@ void io_RemoveBooleanPushHandler
 //--------------------------------------------------------------------------------------------------
 /**
  * Add handler function for EVENT 'io_NumericPush'
+ *
+ * @return reference to the added push handler, or NULL if the path is malformed.
+ *
+ * @note If a NULL reference is returned, the IPC system should just store this and
+ *       use it as the handler reference when removing the handler later. handler_Remove()
+ *       will report an error when this happens, but there will be no other adverse effects.
+ *       On the other side of the IPC link, the client will not see the NULL, as it will
+ *       be replaced by a reference to a local proxy handler object.
  */
 //--------------------------------------------------------------------------------------------------
 io_NumericPushHandlerRef_t io_AddNumericPushHandler
@@ -648,6 +672,14 @@ void io_RemoveNumericPushHandler
 //--------------------------------------------------------------------------------------------------
 /**
  * Add handler function for EVENT 'io_StringPush'
+ *
+ * @return reference to the added push handler, or NULL if the path is malformed.
+ *
+ * @note If a NULL reference is returned, the IPC system should just store this and
+ *       use it as the handler reference when removing the handler later. handler_Remove()
+ *       will report an error when this happens, but there will be no other adverse effects.
+ *       On the other side of the IPC link, the client will not see the NULL, as it will
+ *       be replaced by a reference to a local proxy handler object.
  */
 //--------------------------------------------------------------------------------------------------
 io_StringPushHandlerRef_t io_AddStringPushHandler
@@ -687,6 +719,14 @@ void io_RemoveStringPushHandler
 //--------------------------------------------------------------------------------------------------
 /**
  * Add handler function for EVENT 'io_JsonPush'
+ *
+ * @return reference to the added push handler, or NULL if the path is malformed.
+ *
+ * @note If a NULL reference is returned, the IPC system should just store this and
+ *       use it as the handler reference when removing the handler later. handler_Remove()
+ *       will report an error when this happens, but there will be no other adverse effects.
+ *       On the other side of the IPC link, the client will not see the NULL, as it will
+ *       be replaced by a reference to a local proxy handler object.
  */
 //--------------------------------------------------------------------------------------------------
 io_JsonPushHandlerRef_t io_AddJsonPushHandler
@@ -903,8 +943,6 @@ void io_SetJsonDefault
  * Get the current value of a given resource, with type check.
  *
  * @return A reference to the data sample, or NULL if not available.
- *
- * @note Kills the client if the type doesn't match.
  */
 //--------------------------------------------------------------------------------------------------
 static dataSample_Ref_t GetCurrentValue
