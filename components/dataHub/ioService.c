@@ -34,6 +34,8 @@ UpdateStartEndHandler_t;
 //--------------------------------------------------------------------------------------------------
 static le_dls_List_t UpdateStartEndHandlerList = LE_DLS_LIST_INIT;
 
+/// Default number of update handlers.  This can be overridden in the .cdef.
+#define DEFAULT_UPDATE_HANDLER_POOL_SIZE 5
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -41,6 +43,9 @@ static le_dls_List_t UpdateStartEndHandlerList = LE_DLS_LIST_INIT;
  */
 //--------------------------------------------------------------------------------------------------
 static le_mem_PoolRef_t UpdateStartEndHandlerPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(UpdateStartEndHandlerPool,
+                          DEFAULT_UPDATE_HANDLER_POOL_SIZE,
+                          sizeof(UpdateStartEndHandler_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -75,6 +80,29 @@ static resTree_EntryRef_t FindResource
     return entryRef;
 }
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the client application's namespace to be used for the following calls
+ *
+ * @return:
+ *  - LE_OK if setting client's namespace was successful.
+ *  - LE_DUPLICATE if namespace has already been set.
+ *  - LE_NOT_PERMITTED if setting client's namespace is not permitted. Client application's name
+ *      will be used as namespace in this case.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t io_SetNamespace
+(
+    const char* appNamespace    ///< [IN] Client application's namespace.
+)
+//--------------------------------------------------------------------------------------------------
+{
+#if LE_CONFIG_LINUX
+    return LE_NOT_PERMITTED;
+#else
+    return hub_SetClientNamespace(io_GetClientSessionRef(), appNamespace);
+#endif
+}
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -86,6 +114,7 @@ static resTree_EntryRef_t FindResource
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_FAULT if creation of the input resource failed.
  */
 //--------------------------------------------------------------------------------------------------
 le_result_t io_CreateInput
@@ -148,8 +177,8 @@ le_result_t io_CreateInput
     resRef = resTree_GetInput(nsRef, path, dataType, units);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Failed to create Input '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
-        return LE_FAULT;    // Client has been killed, so it doesn't matter what we return.
+        LE_ERROR("Failed to create Input '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
+        return LE_FAULT;
     }
 
     return LE_OK;
@@ -207,6 +236,7 @@ void io_SetJsonExample
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_FAULT if creation of the output resource failed.
  */
 //--------------------------------------------------------------------------------------------------
 le_result_t io_CreateOutput
@@ -269,8 +299,8 @@ le_result_t io_CreateOutput
     resRef = resTree_GetOutput(nsRef, path, dataType, units);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Failed to create Output '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
-        return LE_FAULT;    // Client has been killed, so it doesn't matter what we return.
+        LE_ERROR("Failed to create Output '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
+        return LE_FAULT;
     }
 
     return LE_OK;
@@ -475,7 +505,7 @@ void io_PushJson
  * Add a handler function to be called when a value is pushed to (and accepted by) an Input
  * or Output in the client app's namespace.
  *
- * @return A reference to the handler or NULL if failed and client has been killed.
+ * @return A reference to the handler or NULL if failed.
  */
 //--------------------------------------------------------------------------------------------------
 static hub_HandlerRef_t AddPushHandler
@@ -982,6 +1012,8 @@ le_result_t io_GetBoolean
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1022,6 +1054,8 @@ le_result_t io_GetNumeric
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1065,6 +1099,8 @@ le_result_t io_GetString
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1106,6 +1142,8 @@ le_result_t io_GetJson
 )
 //--------------------------------------------------------------------------------------------------
 {
+    LE_UNUSED(timestampPtr);
+
     resTree_EntryRef_t resRef = FindResource(path);
     if (resRef == NULL)
     {
@@ -1137,7 +1175,7 @@ io_UpdateStartEndHandlerRef_t io_AddUpdateStartEndHandler
 )
 //--------------------------------------------------------------------------------------------------
 {
-    UpdateStartEndHandler_t* handlerPtr = le_mem_ForceAlloc(UpdateStartEndHandlerPool);
+    UpdateStartEndHandler_t* handlerPtr = le_mem_Alloc(UpdateStartEndHandlerPool);
 
     handlerPtr->link = LE_DLS_LINK_INIT;
 
@@ -1291,8 +1329,9 @@ void ioService_Init
 )
 //--------------------------------------------------------------------------------------------------
 {
-    UpdateStartEndHandlerPool = le_mem_CreatePool("UpdateStartEndHandlers",
-                                                  sizeof(UpdateStartEndHandler_t));
+    UpdateStartEndHandlerPool = le_mem_InitStaticPool(UpdateStartEndHandlerPool,
+                                                      DEFAULT_UPDATE_HANDLER_POOL_SIZE,
+                                                      sizeof(UpdateStartEndHandler_t));
 
     // Register for notification of client sessions closing, so we can convert Input and Output
     // objects into placeholders (or delete them) when the clients that created them go away.

@@ -25,24 +25,32 @@ requires:
     component:
     {
         $CURDIR/../json
+        $CURDIR/../jsonFormatter
     }
 }
 
 sources:
 {
+    adminService.c
     dataHub.c
     dataSample.c
-    resTree.c
+    handler.c
+    ioPoint.c
     ioService.c
-    adminService.c
+    obs.c
     queryService.c
     resource.c
-    ioPoint.c
-    obs.c
-    handler.c
+    resTree.c
+    snapshot.c
 }
 
 cflags:
 {
     -I$CURDIR/../json
+    -I$CURDIR/../jsonFormatter
 }
+
+#if ${DHUB_POOLS_INC} = ""
+#else
+    #include "${DHUB_POOLS_INC}"
+#endif

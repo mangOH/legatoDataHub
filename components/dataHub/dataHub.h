@@ -60,6 +60,20 @@ const char* hub_GetEntryTypeName
     admin_EntryType_t type
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the client app's namespace.
+ *
+ * @return:
+ *  - LE_OK if setting client's namespace was successful.
+ *  - LE_DUPLICATE if namespace has already been set.
+ */
+//--------------------------------------------------------------------------------------------------
+le_result_t hub_SetClientNamespace
+(
+    le_msg_SessionRef_t sessionRef,  ///< [IN] IPC session reference.
+    const char* appNamespace         ///< [IN] namespace
+);
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -70,7 +84,7 @@ const char* hub_GetEntryTypeName
 //--------------------------------------------------------------------------------------------------
 resTree_EntryRef_t hub_GetClientNamespace
 (
-    le_msg_SessionRef_t sessionRef  ///< IPC session reference.
+    le_msg_SessionRef_t sessionRef  ///< [IN] IPC session reference.
 );
 
 

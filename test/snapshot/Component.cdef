@@ -1,0 +1,12 @@
+requires:
+{
+    api:
+    {
+        query.api [manual-start]
+    }
+}
+
+sources:
+{
+    snapshotTool.c
+}

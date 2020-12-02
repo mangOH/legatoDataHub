@@ -31,6 +31,8 @@ typedef struct psensor
 }
 Sensor_t;
 
+/// Default number of psensors.  This may be overridden in the .cdef
+#define DEFAULT_POOL_SIZE 10
 
 //--------------------------------------------------------------------------------------------------
 /**
@@ -38,6 +40,7 @@ Sensor_t;
  */
 //--------------------------------------------------------------------------------------------------
 static le_mem_PoolRef_t SensorPool = NULL;
+LE_MEM_DEFINE_STATIC_POOL(SensorPool, DEFAULT_POOL_SIZE, sizeof(Sensor_t));
 
 
 //--------------------------------------------------------------------------------------------------
@@ -71,6 +74,8 @@ static void HandleEnablePush
 //--------------------------------------------------------------------------------------------------
 {
     Sensor_t* sensorPtr = contextPtr;
+
+    LE_UNUSED(timestamp);
 
     if (sensorPtr->isEnabled != enable)
     {
@@ -107,6 +112,8 @@ static void HandlePeriodPush
 //--------------------------------------------------------------------------------------------------
 {
     Sensor_t* sensorPtr = contextPtr;
+
+    LE_UNUSED(timestamp);
 
     // If the new value is the same as the old value, ignore the push.
     if (sensorPtr->period != period)
@@ -162,6 +169,8 @@ static void HandleTriggerPush
 {
     Sensor_t* sensorPtr = contextPtr;
 
+    LE_UNUSED(timestamp);
+
     if (sensorPtr->isEnabled)
     {
         sensorPtr->sampleFunc(sensorPtr, sensorPtr->sampleFuncContext);
@@ -189,8 +198,9 @@ static void BuildResourcePath
     }
     else
     {
-        LE_ASSERT(snprintf(pathBuffPtr, pathBuffSize, "%s/%s", sensorPtr->name, resourceName)
-                  < pathBuffSize);
+        int result = snprintf(pathBuffPtr, pathBuffSize, "%s/%s", sensorPtr->name, resourceName);
+        LE_ASSERT(result > 0);
+        LE_ASSERT((size_t) result < pathBuffSize);
     }
 }
 
@@ -245,7 +255,7 @@ psensor_Ref_t psensor_Create
 )
 //--------------------------------------------------------------------------------------------------
 {
-    Sensor_t* sensorPtr = le_mem_ForceAlloc(SensorPool);
+    Sensor_t* sensorPtr = le_mem_Alloc(SensorPool);
 
     sensorPtr->isEnabled = false;
     sensorPtr->period = 0.0;
@@ -282,6 +292,7 @@ psensor_Ref_t psensor_Create
     BuildResourcePath(path, sizeof(path), sensorPtr, "enable");
     CreateOutput(path, DHUBIO_DATA_TYPE_BOOLEAN, "");
     sensorPtr->enableHandlerRef = dhubIO_AddBooleanPushHandler(path, HandleEnablePush, sensorPtr);
+
 
     BuildResourcePath(path, sizeof(path), sensorPtr, "period");
     CreateOutput(path, DHUBIO_DATA_TYPE_NUMERIC, "s");
@@ -395,7 +406,7 @@ void psensor_PushBoolean
     Sensor_t* sensorPtr = ref;
 
     char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < sizeof(path));
+    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < (int) sizeof(path));
 
     dhubIO_PushBoolean(path, timestamp, value);
 }
@@ -417,7 +428,7 @@ void psensor_PushNumeric
     Sensor_t* sensorPtr = ref;
 
     char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < sizeof(path));
+    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < (int) sizeof(path));
 
     dhubIO_PushNumeric(path, timestamp, value);
 }
@@ -439,7 +450,7 @@ void psensor_PushString
     Sensor_t* sensorPtr = ref;
 
     char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < sizeof(path));
+    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < (int) sizeof(path));
 
     dhubIO_PushString(path, timestamp, value);
 }
@@ -461,7 +472,7 @@ void psensor_PushJson
     Sensor_t* sensorPtr = ref;
 
     char path[DHUBIO_MAX_RESOURCE_PATH_LEN];
-    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < sizeof(path));
+    LE_ASSERT(snprintf(path, sizeof(path), "%s/value", sensorPtr->name) < (int) sizeof(path));
 
     dhubIO_PushJson(path, timestamp, value);
 }
@@ -469,5 +480,5 @@ void psensor_PushJson
 
 COMPONENT_INIT
 {
-    SensorPool = le_mem_CreatePool("psensor", sizeof(Sensor_t));
+    SensorPool = le_mem_InitStaticPool(SensorPool, DEFAULT_POOL_SIZE, sizeof(Sensor_t));
 }

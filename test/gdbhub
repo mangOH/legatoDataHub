@@ -1,0 +1,45 @@
+#!/bin/bash
+
+DHUB=_build_dataHub/localhost/app/dataHub/staging/read-only/bin/dhub
+
+startlegato
+sdir bind "<${USER}>.le_appInfo" "<${USER}>.le_appInfo"
+sdir bind "<${USER}>.sensord.sensor.io" "<${USER}>.io"
+sdir bind "<${USER}>.sensord.periodicSensor.dhubIO" "<${USER}>.io"
+sdir bind "<${USER}>.actuatord.actuator.io" "<${USER}>.io"
+sdir bind "<${USER}>.actuatord.actuator.admin" "<${USER}>.admin"
+sdir bind "<${USER}>.dhubToolAdmin" "<${USER}>.admin"
+sdir bind "<${USER}>.dhubToolIo" "<${USER}>.io"
+sdir bind "<${USER}>.dhubToolQuery" "<${USER}>.query"
+sdir bind "<${USER}>.dsnap.snapshot.query" "<${USER}>.query"
+
+tmux new -d "gdb -ex 'set debug-file-directory ${LEGATO_ROOT}/build/localhost/debug' \
+            -ex r _build_dataHub/localhost/app/dataHub/staging/read-only/bin/hubd"
+
+sleep 5
+
+_build_sensor/localhost/app/sensor/staging/read-only/bin/sensord &
+SENSORPID=$!
+echo "Started sensor app with PID $SENSORPID."
+
+_build_actuator/localhost/app/actuator/staging/read-only/bin/actuatord &
+ACTUATORPID=$!
+echo "Started actuator app with PID $ACTUATORPID."
+
+_build_appInfoStub/localhost/app/appInfoStub/staging/read-only/bin/appInfoD \
+    --sensor=$SENSORPID                                                     \
+    --actuator=$ACTUATORPID &
+
+sleep 0.25
+
+${DHUB} set backupPeriod temp 5
+${DHUB} set bufferSize temp 100
+${DHUB} set default /app/sensor/counter/period 0.25
+${DHUB} set source /app/sensor/temperature/trigger /app/sensor/counter/value
+${DHUB} set source /obs/temp /app/sensor/temperature/value
+${DHUB} set default /app/sensor/counter/enable true
+
+sleep 1
+
+log level DEBUG hubd/dataHub
+log level DEBUG hubd/jsonFormatter

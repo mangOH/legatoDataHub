@@ -10,6 +10,11 @@
 #ifndef RESOURCE_H_INCLUDE_GUARD
 #define RESOURCE_H_INCLUDE_GUARD
 
+#define RES_FLAG_CHANGING_CONFIG    0x80000000  ///< Administrative config update in progress.
+#define RES_FLAG_RELEVANT           0x40000000  ///< Resource is relevant to current operation.
+#define RES_FLAG_NEW                0x20000000  ///< Node has been created since the last snapshot.
+#define RES_FLAG_DELETED            0x10000000  ///< Node has been deleted since deletions were last
+                                                ///< flushed.
 
 // Forward declaration needed by res_Resource_t.entryRef.  See resTree.h
 typedef struct resTree_Entry* resTree_EntryRef_t;
@@ -39,7 +44,7 @@ typedef struct res_Resource
     io_DataType_t overrideType;///< Data type of the override, if overrideRef != NULL.
     dataSample_Ref_t defaultValue; ///< Ref to default value; NULL if no default set.
     io_DataType_t defaultType;///< Data type of the default value, if defaultRef != NULL.
-    bool isConfigChanging;  ///< true if filter or routing is being changed.
+    uint32_t flags;  ///< Resource status flags.
     le_dls_List_t pushHandlerList;  ///< List of Push Handler callbacks registered on this resource.
     dataSample_Ref_t jsonExample; ///< Ref to JSON example value; NULL if not set.
 }
@@ -717,6 +722,51 @@ void res_RemoveOverride
     res_Resource_t* resPtr
 );
 
+//--------------------------------------------------------------------------------------------------
+/**
+ * Set the resource's relevance flag.
+ */
+//--------------------------------------------------------------------------------------------------
+void res_SetRelevance
+(
+    res_Resource_t  *resPtr,    ///< Resource to query.
+    bool             relevant   ///< Relevance of resource to current operation.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the resource's relevance flag.
+ *
+ * @return Relevance of resource to the current operation.
+ */
+//--------------------------------------------------------------------------------------------------
+bool res_IsRelevant
+(
+    res_Resource_t *resPtr ///< Resource to query.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Mark a resource as no longer "new."  "New" resources are those that were created after the last
+ * snapshot scan of the tree.
+ */
+//--------------------------------------------------------------------------------------------------
+void res_ClearNewness
+(
+    res_Resource_t *resPtr ///< Resource to update.
+);
+
+//--------------------------------------------------------------------------------------------------
+/**
+ * Get the resource's "newness" flag.
+ *
+ * @return Whether the resource was created after the last scan.
+ */
+//--------------------------------------------------------------------------------------------------
+bool res_IsNew
+(
+    res_Resource_t *resPtr ///< Resource to query.
+);
 
 //--------------------------------------------------------------------------------------------------
 /**

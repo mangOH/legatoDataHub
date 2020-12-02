@@ -20,7 +20,10 @@ sandboxed: false
 executables:
 {
     hubd = ( components/dataHub )
+#if ${DHUB_DISABLE_TOOLS} = 1
+#else
     dhub = ( components/adminTool )
+#endif
 }
 
 processes:
@@ -35,18 +38,27 @@ processes:
 
 extern:
 {
-    hubd.dataHub.le_appInfo
-    hubd.dataHub.io
     hubd.dataHub.admin
+    hubd.dataHub.io
+    hubd.dataHub.le_appInfo
     hubd.dataHub.query
 
-    dhubToolAdmin = dhub.adminTool.admin
-    dhubToolQuery = dhub.adminTool.query
+#if ${DHUB_DISABLE_TOOLS} = 1
+#else
+    dhubToolAdmin   = dhub.adminTool.admin
+    dhubToolQuery   = dhub.adminTool.query
+#endif /* end !DHUB_DISABLE_TOOLS */
 }
 
+#if ${LE_CONFIG_LINUX} = y
 bindings:
 {
-    dhub.adminTool.admin -> hubd.dataHub.admin
-    dhub.adminTool.query -> hubd.dataHub.query
-    hubd.dataHub.le_appInfo -> <root>.le_appInfo
+#if ${DHUB_DISABLE_TOOLS} = 1
+#else
+    dhub.adminTool.admin    -> hubd.dataHub.admin
+    dhub.adminTool.query    -> hubd.dataHub.query
+#endif /* end !DHUB_DISABLE_TOOLS */
+
+    hubd.dataHub.le_appInfo -> appInfo.le_appInfo
 }
+#endif /* end LE_CONFIG_LINUX */
