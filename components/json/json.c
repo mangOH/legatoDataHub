@@ -64,9 +64,15 @@ static const char* SkipString
             return NULL;
         }
 
-        // Skip an escaped quote.
-        if ((valPtr[0] == '\\') && (valPtr[1] == '"'))
+        // Skip an escaped character (making sure not to skip past the null terminator).
+        // Note that JSON only allows a few things to be escaped, but we are being tolerant
+        // of invalid escape sequences here in the interests of runtime performance.
+        if (valPtr[0] == '\\')
         {
+            if (valPtr[1] == '\0')
+            {
+                return NULL;
+            }
             valPtr += 2;
         }
         else
