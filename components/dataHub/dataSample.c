@@ -770,12 +770,7 @@ const le_result_t dataSample_ConvertToJson
     {
         case IO_DATA_TYPE_TRIGGER:
 
-            if (valueBuffSize > 0)
-            {
-                valueBuffPtr[0] = '\0';
-                return LE_OK;
-            }
-            return LE_OVERFLOW;
+             return le_utf8_Copy(valueBuffPtr, "null", valueBuffSize, NULL);
 
         case IO_DATA_TYPE_BOOLEAN:
         {
