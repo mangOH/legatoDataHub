@@ -390,6 +390,7 @@ ENUM DataType
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_BAD_PARAMETER if the path is malformed.
  */
 //--------------------------------------------------------------------------------------------------
 FUNCTION le_result_t CreateInput
@@ -424,6 +425,7 @@ FUNCTION SetJsonExample
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_BAD_PARAMETER if the path is malformed.
  */
 //--------------------------------------------------------------------------------------------------
 FUNCTION le_result_t CreateOutput

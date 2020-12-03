@@ -86,6 +86,7 @@ static resTree_EntryRef_t FindResource
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_BAD_PARAMETER if the path is malformed.
  */
 //--------------------------------------------------------------------------------------------------
 le_result_t io_CreateInput
@@ -148,8 +149,8 @@ le_result_t io_CreateInput
     resRef = resTree_GetInput(nsRef, path, dataType, units);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Failed to create Input '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
-        return LE_FAULT;    // Client has been killed, so it doesn't matter what we return.
+        LE_ERROR("Failed to create Input '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
+        return LE_BAD_PARAMETER;
     }
 
     return LE_OK;
@@ -207,6 +208,7 @@ void io_SetJsonExample
  *  - LE_OK if successful.
  *  - LE_DUPLICATE if a resource by that name exists but with different direction, type or units.
  *  - LE_NO_MEMORY if the client is not permitted to create that many resources.
+ *  - LE_BAD_PARAMETER if the path is malformed.
  */
 //--------------------------------------------------------------------------------------------------
 le_result_t io_CreateOutput
@@ -269,8 +271,8 @@ le_result_t io_CreateOutput
     resRef = resTree_GetOutput(nsRef, path, dataType, units);
     if (resRef == NULL)
     {
-        LE_KILL_CLIENT("Failed to create Output '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
-        return LE_FAULT;    // Client has been killed, so it doesn't matter what we return.
+        LE_ERROR("Failed to create Output '/app/%s/%s'.", resTree_GetEntryName(nsRef), path);
+        return LE_BAD_PARAMETER;
     }
 
     return LE_OK;
